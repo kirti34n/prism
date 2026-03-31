@@ -350,20 +350,21 @@ def _select_strategies(state, n=4, mode='think'):
     return (top + explore_picks)[:n]
 
 
-def _generate_perspectives(question, strategies, config):
+def _generate_perspectives(question, strategies, config, quiet=False):
     """Generate default + N perspectives. Parallel for APIs, sequential for Ollama."""
     provider = config.get('provider', 'ollama')
     results = {}
+    _p = (lambda *a, **kw: None) if quiet else (lambda *a, **kw: print(*a, **kw))
 
     # Always generate default first
-    print(f"  [1/{len(strategies)+1}] Default", end="", flush=True)
+    _p(f"  [1/{len(strategies)+1}] Default", end="", flush=True)
     default_resp = _llm_call(
         STRATEGIES['default']['system'],
         question,
         {**config, 'max_tokens': config.get('max_tokens_default', 600)}
     )
     results['default'] = default_resp
-    print(f" — done" if default_resp else f" — failed")
+    _p(f" — done" if default_resp else f" — failed")
 
     # Generate perspectives
     if provider in ('openai', 'anthropic', 'gemini', 'openrouter', 'custom'):
@@ -376,7 +377,7 @@ def _generate_perspectives(question, strategies, config):
                 {**config, 'max_tokens': config.get('max_tokens_perspective', 400)})
             with lock:
                 results[key] = resp
-            print(f"  [{idx+2}/{len(strategies)+1}] {s['name']} — {'done' if resp else 'failed'}")
+            _p(f"  [{idx+2}/{len(strategies)+1}] {s['name']} — {'done' if resp else 'failed'}")
 
         threads = []
         for i, key in enumerate(strategies):
@@ -389,12 +390,12 @@ def _generate_perspectives(question, strategies, config):
         # Sequential for Ollama
         for i, key in enumerate(strategies):
             s = STRATEGIES[key]
-            print(f"  [{i+2}/{len(strategies)+1}] {s['name']}", end="", flush=True)
+            _p(f"  [{i+2}/{len(strategies)+1}] {s['name']}", end="", flush=True)
             prompt = s.get('prefix', '') + question
             resp = _llm_call(s['system'], prompt,
                 {**config, 'max_tokens': config.get('max_tokens_perspective', 400)})
             results[key] = resp
-            print(f" — {'done' if resp else 'failed'}")
+            _p(f" — {'done' if resp else 'failed'}")
 
     return results
 
@@ -1002,7 +1003,7 @@ def get_perspectives(question, mode='think', n=4):
     state = load()
     cfg = state.get('config', _default_config())
     strategies = _select_strategies(state, n, mode=mode)
-    responses = _generate_perspectives(question, strategies, cfg)
+    responses = _generate_perspectives(question, strategies, cfg, quiet=True)
     responses = {k: v for k, v in responses.items() if v}
 
     if 'default' not in responses:
