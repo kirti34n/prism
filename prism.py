@@ -1111,26 +1111,20 @@ def setup(platform):
     if platform == 'install':
         _setup_install(prism_path)
     elif platform in ('claude', 'claude-code'):
-        _setup_install(prism_path)
         _setup_claude_code()
     elif platform == 'codex':
-        _setup_install(prism_path)
         _setup_codex()
     elif platform == 'cursor':
-        _setup_install(prism_path)
         _setup_cursor()
     elif platform == 'copilot':
-        _setup_install(prism_path)
         _setup_copilot()
     elif platform == 'windsurf':
-        _setup_install(prism_path)
         _setup_windsurf()
     elif platform == 'all':
-        _setup_install(prism_path)
         _setup_claude_code()
         _setup_codex()
         _setup_copilot()
-        print(f"\n  All global integrations installed.\n")
+        print(f"\n  All integrations installed.\n")
     else:
         print(f"\n  PRISM — Setup")
         print(f"  {'─' * 40}")
@@ -1140,7 +1134,7 @@ def setup(platform):
         print(f"  prism setup cursor     # Cursor (in project dir)")
         print(f"  prism setup copilot    # GitHub Copilot")
         print(f"  prism setup windsurf   # Windsurf (in project dir)")
-        print(f"  prism setup all        # install + claude + codex + copilot\n")
+        print(f"  prism setup all        # claude + codex + copilot\n")
 
 
 def _setup_install(prism_path):

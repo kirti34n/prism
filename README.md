@@ -41,12 +41,16 @@ Prism is the before/after measurement that reveals this.
 
 ```bash
 git clone https://github.com/kirti34n/prism.git && cd prism
-pipx install .    # installs 'prism' command globally
+```
+
+```bash
+# Choose your scope:
+pipx install .                     # global — 'prism' available everywhere
+python3 prism.py setup install     # global — symlink to ~/.local/bin/prism
+python3 prism.py "your question"   # local — just run from this directory
 ```
 
 > Don't have pipx? `apt install pipx` (Debian/Ubuntu) or `brew install pipx` (macOS).
-> 
-> **Alternative** (no pipx): `python3 prism.py setup install` — symlinks to `~/.local/bin/prism`.
 
 ### Configure your LLM
 
@@ -60,19 +64,17 @@ export ANTHROPIC_API_KEY=sk-...     # Claude
 Zero dependencies. Python 3.7+ and an LLM. Nothing else needed.
 
 > [!TIP]
-> For semantic measurement (384D embeddings instead of word overlap), install sentence-transformers in prism's venv:
-> `pipx inject prism-think sentence-transformers`
+> `pip install sentence-transformers` upgrades measurement from lexical (word overlap) to semantic (384D embeddings). Optional — everything works without it.
 
-### Integrate with AI tools
+### Integrate with AI tools (optional)
 
 ```bash
-# Integrate with your AI tools (pick any, or all)
 prism setup claude     # Claude Code — adds /prism and /prism-check commands
 prism setup codex      # Codex CLI
 prism setup cursor     # Cursor (run in your project dir)
 prism setup copilot    # GitHub Copilot
 prism setup windsurf   # Windsurf (run in your project dir)
-prism setup all        # install + claude + codex + copilot at once
+prism setup all        # claude + codex + copilot
 ```
 
 No server. No daemon. Setup creates config files that teach each AI tool to call `prism` as a shell command.
