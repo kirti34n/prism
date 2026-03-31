@@ -1,177 +1,354 @@
 # Prism
 
-**Think different. Not different answers. Different angles.**
+**See how AI is changing how you think — before you realize it.**
 
-One question through multiple lenses. Measures how your thinking shifts. Works with any LLM.
+[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen.svg)](#install)
 
-Most AI tools give you one answer and agree with everything you say. Prism splits your question through structurally different perspectives — devil's advocate, blind spots, first principles, edge cases, security audit — and measures whether seeing those perspectives actually changes how you think.
+---
 
-## Why
+## What This Is
 
-- AI models are [sycophantic](https://news.stanford.edu/stories/2026/03/ai-advice-sycophantic-models-research) — they agree with you 49% more than humans do
-- AI assistance [harms subsequent unassisted thinking](https://news.harvard.edu/gazette/story/2025/11/is-ai-dulling-our-minds/) (MIT, Harvard studies)
-- AI [homogenizes](https://designobserver.com/suddenly-everyones-life-got-a-lot-more-similar-ai-isnt-just-imitating-creativity-its-homogenizing-thinking/) collective output
-- No tool exists that challenges your thinking instead of validating it
+Every time you ask an AI a question, the answer reshapes how you think about the problem — your framing, your confidence, your sense of what matters. You don't notice. Nobody does. The response sounds reasonable, the process felt rigorous, so you accept the frame and move on.
+
+**Prism makes this visible.**
+
+It forces you to state your position and confidence *before* seeing any AI output. Then it generates structurally different perspectives (not just rephrasing — structural constraints backed by cognitive science). Then it asks you again. The difference between your before and after — your confidence change, whether you reframed the question, whether you drifted toward the AI's default — tells you something no other tool measures: **how much is AI shaping your thinking, and are you aware of it?**
+
+> [!IMPORTANT]
+> **This is not a better way to get AI answers.** If you want better AI outputs, use multi-agent systems, RAG pipelines, chain-of-thought — there are excellent tools for that ([LLM Council](https://github.com/karpathy/llm-council), [llm-consortium](https://github.com/irthomasthomas/llm-consortium), [STORM](https://github.com/stanford-oval/storm)). Prism is a **measurement instrument**. The perspectives are the experiment. The finding is what happens to *you*.
+
+---
+
+## Why This Matters
+
+You type a research question. An AI gives you an elaborate, well-structured answer. Maybe multiple agents debated it. Maybe it searched the web and cited papers. You think: "that was thorough." But:
+
+- The AI agreed with your framing [49% more than a human would](https://news.stanford.edu/stories/2026/03/ai-advice-sycophantic-models-research) (Science, 2026)
+- You rated its answer as more trustworthy *because* it agreed with you
+- AI-generated ideas [look novel individually but converge at population level](https://arxiv.org/abs/2409.04109) — only 5% unique from 4,000 generated
+- After using AI, people produce [narrower ideas and think less critically](https://www.microsoft.com/en-us/research/blog/the-future-of-ai-in-knowledge-work-tools-for-thought-at-chi-2025/) (Microsoft CHI 2025)
+- Students with AI access performed better during practice but [worse on independent tests](https://arxiv.org/abs/2404.10730) — a dependency effect (Bastani et al. 2024, n=1000+)
+
+The AI didn't make you think better. It made you think *its way*. And the longer the process looked, the more you trusted the result.
+
+Prism is the before/after measurement that reveals this.
+
+---
 
 ## Install
 
 ```bash
-pip install sentence-transformers  # for measuring thinking shifts
-git clone https://github.com/YOUR_USERNAME/prism.git && cd prism
+git clone https://github.com/kirti34n/prism.git && cd prism
 
-# Configure your LLM (pick one):
+# Set your LLM (pick one):
 export OPENAI_API_KEY=sk-...        # OpenAI
 export ANTHROPIC_API_KEY=sk-...     # Claude
-export GOOGLE_API_KEY=...           # Gemini
 # OR just have Ollama running       # Local (auto-detected)
 
-python3 prism.py think
+python3 prism.py "Is my hypothesis falsifiable?"
 ```
 
-Works with **any LLM**: OpenAI, Claude, Gemini, Ollama (local), OpenRouter, or any OpenAI-compatible endpoint.
+Zero dependencies. Python 3.7+ and an LLM. Nothing to install, no server to maintain.
+
+> [!TIP]
+> `pip install sentence-transformers` upgrades measurement from lexical (word overlap) to semantic (384D embeddings). Optional — everything works without it.
+
+---
 
 ## Usage
 
 ```bash
-# General thinking — before/after measurement
-prism.py explore "Should I quit my job?"
+# The full loop: state position → see perspectives → revise → measure shift
+python3 prism.py "Does correlation imply causation in my dataset?"
 
-# Coding perspectives — edge cases, security, simplify, scale, review
-prism.py code "JWT auth API with refresh tokens"
+# Challenge an AI conclusion before you commit to it
+python3 prism.py check "The model says microservices because of scalability"
 
-# What's on your mind?
-prism.py think
+# Just show perspectives, no measurement
+python3 prism.py quick "Should I use mixed methods?"
 
-# Just show perspectives (no measurement)
-prism.py quick "Is microservices the right architecture?"
+# Random research prompt
+python3 prism.py think
 
-# See how your thinking is changing over time
-prism.py insights
+# Your thinking patterns over time
+python3 prism.py insights
 
 # Recent sessions
-prism.py history
+python3 prism.py history
 
 # Configuration
-prism.py config                    # show current
-prism.py config provider openai    # switch provider
-prism.py config model gpt-4o      # switch model
-
-# MCP server (for Claude Code, Codex, Cursor, etc.)
-prism.py serve
+python3 prism.py config provider openai
+python3 prism.py config strategies "pre_mortem,falsification,blind_spot"
 ```
+
+---
 
 ## How It Works
 
-### The Explore Loop
-
+```mermaid
+flowchart TD
+    A["Your question"] --> B["State your position"]
+    B --> C["Rate confidence 1-10"]
+    C --> D["Prism generates perspectives via your LLM"]
+    D --> E["Ranks by divergence from default"]
+    E --> F["Shows top 3 most different"]
+    F --> G["Revise your position — or ask a different question"]
+    G --> H["Rate confidence again"]
+    H --> I{"What happened to your thinking?"}
+    I -->|"Asked different question"| J["REFRAMING"]
+    I -->|"Confidence dropped 3+"| K["DESTABILIZATION"]
+    I -->|"Shifted independently"| L["RECONCEPTUALIZATION"]
+    I -->|"Moved toward AI"| M["ADOPTION"]
+    I -->|"No change"| N["UNSHAKEN"]
 ```
-1. You answer first (before seeing anything)
-2. Prism generates perspectives through your LLM:
-   - Default answer (the control)
-   - 4 structural perspectives (selected from 16 strategies)
-3. Picks the 3 most DIVERGENT from default (by embedding distance)
-4. Shows you: default + divergent perspectives
-5. You answer again
-6. Measures: how far you shifted, toward which perspective, independence score
-7. You rate which perspective was most useful (optional, one keystroke)
-```
 
-### 16 Perspective Strategies
+### The `check` command
 
-Not role-playing ("pretend you're a contrarian"). **Structural constraints** that force genuinely different output shapes:
-
-**Thinking:**
-| Strategy | What it forces |
-|---|---|
-| Devil's Advocate | Argue AGAINST the common position. No hedging. |
-| Blind Spot | Name exactly ONE thing everyone misses. |
-| First Principles | List assumptions, negate each, rebuild. |
-| Temporal | Answer from 50 years ago, today, 50 years from now. |
-| Stakeholder | Write ONLY from who gets hurt. |
-| Systems | Only second and third-order effects. |
-| Constraint Removal | Remove the biggest constraint. What changes? |
-| Emotional | No analysis. Only fears, hopes, anxieties. |
-| Inversion | Answer the exact opposite question. |
-
-**Coding:**
-| Strategy | What it forces |
-|---|---|
-| Edge Cases | 3-5 most dangerous failure modes in production. |
-| Security | Specific vulnerability classes (OWASP). Attack surface. |
-| Simplify | 50% simpler solution. Fewer files, fewer abstractions. |
-| Scale | What breaks at 10x, 100x, 1000x? |
-| Code Review | Senior engineer PR review. What will cause pain later. |
-| Alt Stack | Same problem, completely different technology. |
-
-The system learns which strategies challenge YOU most and weights toward those over time.
-
-## Measurement
-
-After each session, Prism measures:
-
-- **Shift**: How far your thinking moved (cosine distance of before/after embeddings)
-- **Direction**: Toward a perspective? Toward the default? Or independent territory?
-- **Independence**: How far you are from any AI-generated response
-
-Over time (`prism insights`):
-- **Convergence tracking**: Are you becoming more like the AI default? (The sycophancy detector)
-- **Strategy ranking**: Which perspectives actually shift your thinking?
-- **Topic patterns**: Where do you shift most? Where are you rigid?
-
-## Integration with Coding Tools
-
-### MCP Server (Claude Code, Codex, Cursor, Cline)
+For the moment after you've done AI-assisted research and are about to commit:
 
 ```bash
-# Start MCP server
-pip install fastmcp
-python3 prism.py serve
-
-# Register with Claude Code
-claude mcp add prism -- python3 /path/to/prism.py serve
-
-# Register with Codex
-# Add to ~/.codex/config.toml
+python3 prism.py check "The literature suggests X causes Y based on correlation studies"
 ```
 
-### Machine-Readable Output (for hooks/scripts)
+Generates 4 targeted challenges — **Pre-Mortem** (how this fails), **Alt Hypothesis** (3 other explanations), **Falsification** (what would disprove it), **Blind Spot** (what everyone misses). No before/after measurement — just sharp challenges.
 
-```bash
-# JSON output for integration
-python3 prism.py json "your question"
-python3 prism.py json "your code task" --code
-```
+---
 
-## How It Actually Helps (Research)
+## What Prism Measures
 
-| Mechanism | Research | How Prism implements it |
+> [!NOTE]
+> The goal is not to provide better AI answers. The goal is to make visible how AI's default response is already shaping your thinking — your framing, your confidence, your assumptions — without you realizing it.
+
+### Session types
+
+Each session is classified by what happened to your thinking:
+
+| Type | What happened | What it means |
 |---|---|---|
-| Self-explanation | Chi et al. 1989 (d > 0.8) | You MUST state your view before seeing AI |
-| Guided reflection | Lew & Schmidt 2011 | Specific structural perspectives, not open-ended |
-| Friction prevents dependency | Bastani et al. 2024 (n=1000+) | Think first, THEN see AI |
-| Anti-sycophancy | Stanford 2026 | Perspectives selected for MAX divergence |
-| Metacognitive monitoring | Flavell 1979 | Shift measurement makes patterns visible |
+| **Reframing** | You asked a different question entirely | Deepest shift — your frame changed, not just your answer |
+| **Destabilization** | Confidence dropped significantly | Productive doubt — a held belief was shaken |
+| **Reconceptualization** | Position changed in an independent direction | Genuine new thinking — you went somewhere the AI didn't point |
+| **Adoption** | Moved toward a model response | Caution — you may have absorbed the AI's frame |
+| **Unshaken** | No change in position or confidence | The perspectives didn't land — or you were already well-calibrated |
+
+### What's tracked
+
+- **Confidence delta**: 1-10 before and after. One keystroke. The single highest-signal measure of real thinking change.
+- **Text shift**: How far your words moved (lexical or semantic depending on what's installed)
+- **Direction**: Did you move toward a perspective, toward the default, or into independent territory?
+- **Session type**: The classification above — based on confidence + text + direction together
+
+### Over time (`prism insights`)
+
+- **Session type distribution**: Are you mostly reframing (good) or mostly adopting (concerning)?
+- **Confidence trends**: Is Prism creating productive doubt, or increasing false confidence?
+- **Strategy effectiveness**: Which perspectives actually challenge YOUR thinking — ranked by deep shift rate
+- **Convergence tracking**: Are you moving closer to AI defaults over time? (the sycophancy detector)
+
+---
+
+## 10 Perspective Strategies
+
+<details>
+<summary><b>View all strategies with research evidence</b></summary>
+
+Not role-playing ("pretend you're a contrarian"). **Structural constraints** backed by cognitive science that force genuinely different output shapes from a single LLM.
+
+### General
+
+| Strategy | What it forces | Evidence |
+|---|---|---|
+| **Devil's Advocate** | Argue AGAINST the common position. No hedging. | Lord, Lepper & Preston 1984 — "consider the opposite" outperforms "be fair" instructions (which do nothing) |
+| **Blind Spot** | Name exactly ONE thing everyone misses | — |
+| **First Principles** | List assumptions, negate each, rebuild | Koriat 1980 — counterargument generation calibrates confidence |
+| **Inversion** | Answer the exact opposite question | Mussweiler 2000 — eliminates anchoring in expert judgment |
+| **Systems** | Only second and third-order effects | — |
+| **Stakeholder** | Write ONLY from who gets hurt | Galinsky & Moskowitz 2000 — perspective-taking reduces bias on conscious and unconscious measures |
+
+### Research-specific
+
+| Strategy | What it forces | Evidence |
+|---|---|---|
+| **Pre-Mortem** | "This has already failed. The failure was predictable. Why?" | Klein 2007 — prospective hindsight generates 30% more failure reasons, significantly reduces overconfidence (Veinott 2010, n=178) |
+| **Alt Hypothesis** | 3 structurally different explanations for the same evidence | Hirt & Markman 1995 — *any* plausible alternative triggers a debiasing simulation mindset |
+| **Falsification** | What specific result would disprove this entirely? | Tetlock 2015 — superforecasters are 60% more accurate than intelligence analysts with classified data; this is their core habit |
+| **Adjacent Field** | How would a completely different field frame this problem? | Uzzi et al. 2013 (Science, 17.9M papers) — papers with atypical field combinations are 2x more likely to be highly cited |
+
+</details>
+
+### Two modes
+
+- **Auto** (default): System learns which strategies shift YOUR thinking most. Uses weighted selection with random exploration.
+- **Manual**: Pick specific strategies in config. Predictable and cheaper.
+
+---
+
+## Does This Work for Complex Queries?
+
+Honest answer: **partially.**
+
+**What works at any complexity level:**
+- **Forcing articulation** — stating your position clearly before seeing AI is valuable whether the question is simple or frontier research
+- **Confidence tracking** — knowing your confidence went from 8 to 5 is meaningful regardless of domain
+- **Pre-mortem and falsification** — these challenge the FRAME, not the content, so they work even when the LLM doesn't deeply understand your niche
+- **The measurement** — knowing you drifted toward the AI default is valuable at any complexity
+
+**What doesn't scale as well:**
+- **Perspective quality** — for cutting-edge research, the LLM may generate textbook-level challenges, not frontier-level ones. The perspectives are as good as the model's domain knowledge.
+- **Adjacent field suggestions** — may be superficial for highly specialized topics
+- **Alternative hypotheses** — may be obvious to domain experts
+
+**The `check` command scales better** — when you feed it an AI's own conclusion, the LLM is challenging something already in its domain of knowledge. Challenging an existing answer is easier than generating novel perspectives from scratch.
+
+> [!WARNING]
+> Prism's perspectives come from the same kind of model that gave you the default answer. Structural constraints force different output shapes, but the underlying reasoning shares the same training data and RLHF patterns. Prism reveals the influence — it doesn't fully escape it.
+
+---
 
 ## Configuration
 
-```bash
-prism.py config provider ollama          # Ollama (local, default)
-prism.py config provider openai          # OpenAI
-prism.py config provider anthropic       # Claude
-prism.py config provider gemini          # Gemini
-prism.py config provider openrouter      # OpenRouter
-prism.py config provider custom          # Any OpenAI-compatible
-prism.py config model gpt-4o-mini        # Set model
-prism.py config endpoint http://host:1234/v1  # Custom endpoint
-prism.py config temperature 0.9          # Higher = more diverse
-prism.py config num_perspectives 5       # More perspectives per run
+<details>
+<summary><b>Full configuration reference</b></summary>
+
+### Config hierarchy
+
 ```
+.prism.json (project)  →  ~/.config/prism/config.json (global)  →  auto-detect
+```
+
+Project config overrides global. Both override auto-detection.
+
+### Global: `~/.config/prism/config.json`
+
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "temperature": 0.7
+}
+```
+
+### Project: `.prism.json`
+
+```json
+{
+  "strategies": ["pre_mortem", "falsification", "adjacent_field"],
+  "num_perspectives": 3,
+  "temperature": 0.9
+}
+```
+
+### Providers
+
+```bash
+python3 prism.py config provider ollama          # Local
+python3 prism.py config provider openai          # OpenAI
+python3 prism.py config provider anthropic       # Claude
+python3 prism.py config provider gemini          # Gemini
+python3 prism.py config provider openrouter      # OpenRouter
+python3 prism.py config provider custom          # Any OpenAI-compatible
+python3 prism.py config endpoint http://host:1234/v1
+```
+
+### Strategy selection
+
+```bash
+# System learns what works for you
+python3 prism.py config strategies auto
+
+# Pick specific strategies
+python3 prism.py config strategies "pre_mortem,falsification,blind_spot,inversion"
+```
+
+Available: `devils_advocate`, `blind_spot`, `first_principles`, `inversion`, `systems`, `stakeholder`, `pre_mortem`, `alternative_hypothesis`, `falsification`, `adjacent_field`
+
+</details>
+
+---
+
+## Using Prism Well
+
+1. **Use it before you've committed** to an approach — cognitive flexibility is highest early
+2. **State your position honestly** — self-explanation works best with honest attempts, not performance ([Chi 1989](https://onlinelibrary.wiley.com/doi/10.1207/s15516709cog1803_3))
+3. **Watch your confidence** — if it always goes UP after perspectives, you're probably anchoring to the AI
+4. **Use `check` after AI research** — the longer the AI process, the more you need to challenge the conclusion
+5. **Reframing is the deepest signal** — if you find yourself asking a different question, the perspectives worked
+6. **"Adoption" is the warning sign** — if you consistently move toward model responses, you're reading and absorbing rather than thinking
+
+> [!WARNING]
+> If insights shows you're consistently in "adoption" mode, you may be parroting perspectives rather than integrating them. Try stating your revised position **without looking back** at the AI output.
+
+---
+
+## What This Is Not
+
+**This is not a tool for getting better AI answers.** If that's what you need, these exist and work well:
+
+- [LLM Council](https://github.com/karpathy/llm-council) (16K stars) — multiple models peer-review each other
+- [llm-consortium](https://github.com/irthomasthomas/llm-consortium) — parallel multi-model with arbiter synthesis
+- [STORM](https://github.com/stanford-oval/storm) (28K stars) — multi-perspective article generation
+- [Perplexity](https://perplexity.ai) — multi-model council for research queries
+
+Those tools make the AI output better. **Prism measures what the AI output does to you.**
+
+The distinction matters because better AI answers make the influence problem *worse*, not better — more convincing answers are harder to resist, and the more elaborate the process looks, the more you trust the result. Prism is the instrument that makes this effect visible.
+
+---
+
+## Research Foundation
+
+<details>
+<summary><b>Evidence base for each design decision</b></summary>
+
+| Design decision | Research | What it found |
+|---|---|---|
+| Think before seeing AI | Chi et al. 1989 (d > 0.8) | Self-explanation improves understanding; must generate, not receive |
+| Structural constraints, not roles | Lord, Lepper & Preston 1984 | "Consider the opposite" works; "be fair and unbiased" does nothing |
+| Confidence tracking | Hasan et al. (CRI) | Answer + confidence together distinguishes misconception from ignorance from genuine understanding |
+| Frame-change detection | Vosniadou (conceptual change) | Genuine change generates new questions, not just new answers |
+| Pre-mortem strategy | Klein 2007, Veinott 2010 (n=178) | Prospective hindsight generates 30% more failure reasons, reduces overconfidence |
+| Alternative hypothesis | Hirt & Markman 1995 | Any plausible alternative triggers debiasing simulation mindset |
+| Falsification probe | Tetlock 2015 (Superforecasting) | Best forecasters are 60% more accurate; falsification is their key habit |
+| Adjacent field exposure | Uzzi 2013 (Science, 17.9M papers) | Atypical combinations produce 2x citation impact |
+| Divergence ranking | Anti-sycophancy (Stanford 2026) | Select for MAX divergence from default to counter agreement bias |
+| Friction by design | Bastani et al. 2024 (n=1000+) | AI access improved practice performance, worsened independent test performance |
+
+### Honest caveats (what the research says AGAINST this approach)
+
+- **Self-tracking rarely changes behavior** — fitness tracker RCTs show negative results at 24 months (Jakicic 2016, JAMA, n=471). Prism's insights may not drive lasting change.
+- **Single-model perspectives share priors** — structural constraints produce output-shape divergence, but the reasoning comes from one set of weights with one training distribution.
+- **Reading AI text is passive** — Chi's work argues for generation over reception. The before/after input is active; reading perspectives is passive consumption.
+- **AI ideas homogenize at scale** — individual outputs look novel, but across users, everyone gets steered toward similar frames (Doshi & Hauser 2024, Science Advances, n=293).
+- **Effect durability unknown** — most perspective-taking research measures immediately after the intervention. Whether thinking stays changed is underresearched.
+- **Perspective quality is LLM-limited** — for cutting-edge research, the model may not know enough to generate genuinely challenging alternatives.
+
+</details>
+
+---
+
+## Status
+
+This is a side project, built and improved in free time. The code is minimal, the scope is deliberately narrow, and there are no plans to turn this into a product or service.
+
+But the findings are real. If you use Prism for a few sessions and look at your insights, you'll see patterns in how AI is shaping your thinking — your confidence changes, your tendency to adopt or resist AI framing, which types of challenges actually move you. That data is yours, it stays on your machine, and it tells you something no other tool measures.
+
+Contributions, feedback, and research collaborations welcome.
+
+---
 
 ## Philosophy
 
-Born from [SPARK](https://github.com/YOUR_USERNAME/spark) — 18 versions of testing computational creativity tools. Every version proved: the machinery doesn't matter. What matters is putting a human in front of genuinely different perspectives and measuring what happens.
+Born from [SPARK](https://github.com/kirti34n/spark) — 18 versions of testing computational creativity tools. Every version proved: scaffolds don't work, evolution converges, multi-model disagreement is mostly style not substance.
 
-Prism is the experiment that 18 versions avoided: **does seeing where AI can think differently change how YOU think?**
+But one thing was never measured: **what does the AI's default response do to the human asking the question?**
+
+Not what the AI outputs. What happens to *you*.
+
+Prism measures that.
+
+---
 
 ## License
 
