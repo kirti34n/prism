@@ -4,7 +4,7 @@
 
 [![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen.svg)](#install)
+[![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen.svg)](#get-started)
 
 ---
 
@@ -37,7 +37,9 @@ Prism is the before/after measurement that reveals this.
 
 ---
 
-## Install
+## Get Started
+
+### 1. Clone and configure
 
 ```bash
 git clone https://github.com/kirti34n/prism.git && cd prism
@@ -46,42 +48,83 @@ git clone https://github.com/kirti34n/prism.git && cd prism
 export OPENAI_API_KEY=sk-...        # OpenAI
 export ANTHROPIC_API_KEY=sk-...     # Claude
 # OR just have Ollama running       # Local (auto-detected)
-
-python3 prism.py "Is my hypothesis falsifiable?"
 ```
 
-Zero dependencies. Python 3.7+ and an LLM. Nothing to install, no server to maintain.
+Zero dependencies. Python 3.7+ and an LLM. Nothing else needed.
 
 > [!TIP]
 > `pip install sentence-transformers` upgrades measurement from lexical (word overlap) to semantic (384D embeddings). Optional — everything works without it.
+
+### 2. Install globally and integrate
+
+```bash
+# Make 'prism' available as a command everywhere
+python3 prism.py setup install
+
+# Integrate with your AI tools (pick any, or all)
+prism setup claude     # Claude Code — adds /prism and /prism-check commands
+prism setup codex      # Codex CLI
+prism setup cursor     # Cursor (run in your project dir)
+prism setup copilot    # GitHub Copilot
+prism setup windsurf   # Windsurf (run in your project dir)
+prism setup all        # install + claude + codex + copilot at once
+```
+
+No server. No daemon. Setup creates config files that teach each AI tool to call `prism` as a shell command.
+
+> [!NOTE]
+> After `setup claude`, **restart Claude Code** to pick up new slash commands. Or use `! prism check "conclusion"` which works immediately without restart.
+
+### 3. Use it
+
+```bash
+prism "Is my hypothesis falsifiable?"
+```
 
 ---
 
 ## Usage
 
+### Standalone (terminal)
+
 ```bash
-# The full loop: state position → see perspectives → revise → measure shift
-python3 prism.py "Does correlation imply causation in my dataset?"
+# Full loop: state position → see perspectives → revise → measure shift
+prism "Does correlation imply causation in my dataset?"
 
 # Challenge an AI conclusion before you commit to it
-python3 prism.py check "The model says microservices because of scalability"
+prism check "The model says microservices because of scalability"
 
 # Just show perspectives, no measurement
-python3 prism.py quick "Should I use mixed methods?"
+prism quick "Should I use mixed methods?"
 
 # Random research prompt
-python3 prism.py think
+prism think
 
 # Your thinking patterns over time
-python3 prism.py insights
+prism insights
 
 # Recent sessions
-python3 prism.py history
+prism history
 
 # Configuration
-python3 prism.py config provider openai
-python3 prism.py config strategies "pre_mortem,falsification,blind_spot"
+prism config provider openai
+prism config strategies "pre_mortem,falsification,blind_spot"
+
+# Machine-readable output (for scripts and integrations)
+prism json "your question"
+prism json --check "AI conclusion"
 ```
+
+### Inside AI tools
+
+**Claude Code:**
+```
+/prism Is my hypothesis falsifiable?
+/prism-check The data shows correlation therefore causation
+```
+
+**Codex / Copilot / Cursor / Windsurf:**
+Ask your AI: "challenge this conclusion using prism" or "get prism perspectives on X" — the setup instructions teach the AI to run the command.
 
 ---
 
@@ -109,7 +152,7 @@ flowchart TD
 For the moment after you've done AI-assisted research and are about to commit:
 
 ```bash
-python3 prism.py check "The literature suggests X causes Y based on correlation studies"
+prism check "The literature suggests X causes Y based on correlation studies"
 ```
 
 Generates 4 targeted challenges — **Pre-Mortem** (how this fails), **Alt Hypothesis** (3 other explanations), **Falsification** (what would disprove it), **Blind Spot** (what everyone misses). No before/after measurement — just sharp challenges.
@@ -178,10 +221,9 @@ Not role-playing ("pretend you're a contrarian"). **Structural constraints** bac
 
 </details>
 
-### Two modes
-
-- **Auto** (default): System learns which strategies shift YOUR thinking most. Uses weighted selection with random exploration.
-- **Manual**: Pick specific strategies in config. Predictable and cheaper.
+**Two modes:**
+- **Auto** (default): System learns which strategies shift YOUR thinking most. Weighted selection with random exploration.
+- **Manual**: `prism config strategies "pre_mortem,falsification,blind_spot"` — predictable and cheaper.
 
 ---
 
@@ -196,88 +238,12 @@ Honest answer: **partially.**
 - **The measurement** — knowing you drifted toward the AI default is valuable at any complexity
 
 **What doesn't scale as well:**
-- **Perspective quality** — for cutting-edge research, the LLM may generate textbook-level challenges, not frontier-level ones. The perspectives are as good as the model's domain knowledge.
+- **Perspective quality** — for cutting-edge research, the LLM may generate textbook-level challenges, not frontier-level ones
 - **Adjacent field suggestions** — may be superficial for highly specialized topics
 - **Alternative hypotheses** — may be obvious to domain experts
 
-**The `check` command scales better** — when you feed it an AI's own conclusion, the LLM is challenging something already in its domain of knowledge. Challenging an existing answer is easier than generating novel perspectives from scratch.
-
 > [!WARNING]
 > Prism's perspectives come from the same kind of model that gave you the default answer. Structural constraints force different output shapes, but the underlying reasoning shares the same training data and RLHF patterns. Prism reveals the influence — it doesn't fully escape it.
-
----
-
-## Integration with AI Tools
-
-No server. No daemon. Prism becomes a system command, then each tool just calls it.
-
-### Setup
-
-```bash
-# Step 1: Make 'prism' available everywhere
-python3 prism.py setup install
-
-# Step 2: Integrate with your tools (pick any)
-prism setup claude     # Claude Code — /prism and /prism-check slash commands
-prism setup codex      # Codex CLI — adds to instructions
-prism setup cursor     # Cursor — creates rule file (run in project dir)
-prism setup copilot    # GitHub Copilot — adds to instructions
-prism setup windsurf   # Windsurf — adds to rules (run in project dir)
-
-# Or everything at once
-prism setup all        # install + claude + codex + copilot
-```
-
-> [!NOTE]
-> After `setup claude`, **restart Claude Code** to pick up new slash commands. Or use `! prism check "conclusion"` which works immediately with no restart.
-
-### How it works in each tool
-
-**Claude Code:**
-```
-/prism Is my hypothesis falsifiable?
-/prism-check The data shows correlation therefore causation
-```
-Or inline: `! prism check "The AI concluded X"`
-
-**Codex / Copilot / Cursor / Windsurf:**
-Just ask: "challenge this conclusion using prism" or "get prism perspectives on X" — the instructions teach the AI to run the command.
-
-**Any tool with shell access:**
-```bash
-prism json "your question"              # perspectives as JSON
-prism json --check "AI conclusion"      # challenges as JSON
-```
-
-<details>
-<summary><b>Manual integration (no setup command needed)</b></summary>
-
-All integrations work the same way: tell your AI tool to run `prism json "question"` or `prism json --check "conclusion"` and parse the JSON output.
-
-**Claude Code** — create `~/.claude/commands/prism.md`:
-```markdown
-Run: prism json "$ARGUMENTS"
-Parse JSON. Show each perspective's key insight concisely.
-```
-
-**Codex** — add to `~/.codex/instructions.md`:
-```markdown
-To challenge conclusions: prism json --check "conclusion"
-To get perspectives: prism json "question"
-```
-
-**Cursor** — add to `.cursorrules`:
-```
-To challenge conclusions: prism json --check "conclusion"
-To get perspectives: prism json "question"
-```
-
-**Copilot** — add to `.github/copilot-instructions.md`:
-```markdown
-To challenge conclusions: prism json --check "conclusion"
-```
-
-</details>
 
 ---
 
@@ -317,23 +283,20 @@ Project config overrides global. Both override auto-detection.
 ### Providers
 
 ```bash
-python3 prism.py config provider ollama          # Local
-python3 prism.py config provider openai          # OpenAI
-python3 prism.py config provider anthropic       # Claude
-python3 prism.py config provider gemini          # Gemini
-python3 prism.py config provider openrouter      # OpenRouter
-python3 prism.py config provider custom          # Any OpenAI-compatible
-python3 prism.py config endpoint http://host:1234/v1
+prism config provider ollama          # Local
+prism config provider openai          # OpenAI
+prism config provider anthropic       # Claude
+prism config provider gemini          # Gemini
+prism config provider openrouter      # OpenRouter
+prism config provider custom          # Any OpenAI-compatible
+prism config endpoint http://host:1234/v1
 ```
 
 ### Strategy selection
 
 ```bash
-# System learns what works for you
-python3 prism.py config strategies auto
-
-# Pick specific strategies
-python3 prism.py config strategies "pre_mortem,falsification,blind_spot,inversion"
+prism config strategies auto       # system learns what works for you
+prism config strategies "pre_mortem,falsification,blind_spot,inversion"
 ```
 
 Available: `devils_advocate`, `blind_spot`, `first_principles`, `inversion`, `systems`, `stakeholder`, `pre_mortem`, `alternative_hypothesis`, `falsification`, `adjacent_field`
@@ -351,30 +314,12 @@ Available: `devils_advocate`, `blind_spot`, `first_principles`, `inversion`, `sy
 5. **Reframing is the deepest signal** — if you find yourself asking a different question, the perspectives worked
 6. **"Adoption" is the warning sign** — if you consistently move toward model responses, you're reading and absorbing rather than thinking
 
-> [!WARNING]
-> If insights shows you're consistently in "adoption" mode, you may be parroting perspectives rather than integrating them. Try stating your revised position **without looking back** at the AI output.
-
----
-
-## What This Is Not
-
-**This is not a tool for getting better AI answers.** If that's what you need, these exist and work well:
-
-- [LLM Council](https://github.com/karpathy/llm-council) (16K stars) — multiple models peer-review each other
-- [llm-consortium](https://github.com/irthomasthomas/llm-consortium) — parallel multi-model with arbiter synthesis
-- [STORM](https://github.com/stanford-oval/storm) (28K stars) — multi-perspective article generation
-- [Perplexity](https://perplexity.ai) — multi-model council for research queries
-
-Those tools make the AI output better. **Prism measures what the AI output does to you.**
-
-The distinction matters because better AI answers make the influence problem *worse*, not better — more convincing answers are harder to resist, and the more elaborate the process looks, the more you trust the result. Prism is the instrument that makes this effect visible.
-
 ---
 
 ## Research Foundation
 
 <details>
-<summary><b>Evidence base for each design decision</b></summary>
+<summary><b>Evidence base and honest caveats</b></summary>
 
 | Design decision | Research | What it found |
 |---|---|---|
@@ -389,7 +334,7 @@ The distinction matters because better AI answers make the influence problem *wo
 | Divergence ranking | Anti-sycophancy (Stanford 2026) | Select for MAX divergence from default to counter agreement bias |
 | Friction by design | Bastani et al. 2024 (n=1000+) | AI access improved practice performance, worsened independent test performance |
 
-### Honest caveats (what the research says AGAINST this approach)
+### What the research says AGAINST this approach
 
 - **Self-tracking rarely changes behavior** — fitness tracker RCTs show negative results at 24 months (Jakicic 2016, JAMA, n=471). Prism's insights may not drive lasting change.
 - **Single-model perspectives share priors** — structural constraints produce output-shape divergence, but the reasoning comes from one set of weights with one training distribution.
