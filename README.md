@@ -39,19 +39,21 @@ Prism is the before/after measurement that reveals this.
 
 ## Get Started
 
-### Option A: Install via pip (recommended)
+### Option A: Install via pipx (recommended)
 
 ```bash
-pip install prism-think
+pipx install prism-think
 ```
 
-That's it. The `prism` command is now available globally.
+That's it. The `prism` command is now available globally in an isolated environment.
+
+> Don't have pipx? `apt install pipx` (Debian/Ubuntu) or `brew install pipx` (macOS).
 
 ### Option B: Install from source
 
 ```bash
 git clone https://github.com/keerti/prism.git && cd prism
-pip install .
+pipx install .
 ```
 
 ### Option C: Standalone (no install)
@@ -73,7 +75,8 @@ export ANTHROPIC_API_KEY=sk-...     # Claude
 Zero dependencies. Python 3.7+ and an LLM. Nothing else needed.
 
 > [!TIP]
-> `pip install prism-think[semantic]` upgrades measurement from lexical (word overlap) to semantic (384D embeddings). Optional — everything works without it.
+> For semantic measurement (384D embeddings instead of word overlap), install sentence-transformers in prism's venv:
+> `pipx inject prism-think sentence-transformers`
 
 ### Integrate with AI tools
 
