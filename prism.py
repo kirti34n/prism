@@ -13,8 +13,8 @@ Research-backed structural constraints. Zero dependencies.
   prism history                 # recent sessions
   prism config [key] [val]      # show or set configuration
   prism setup install           # make 'prism' a global command
-  prism setup claude            # + Claude Code slash commands
-  prism setup all               # install + all integrations
+  prism setup claude            # Claude Code (/prism slash command)
+  prism setup all               # all tool integrations
   prism json "question"         # machine-readable output
   prism json --check "concl"    # machine-readable check output
   prism reset                   # fresh start
@@ -1108,22 +1108,24 @@ def setup(platform):
     """Set up integration with AI coding tools."""
     prism_path = os.path.realpath(__file__)
 
-    if platform == 'install':
-        _setup_install(prism_path)
-    elif platform in ('claude', 'claude-code'):
-        _setup_claude_code()
-    elif platform == 'codex':
-        _setup_codex()
-    elif platform == 'cursor':
-        _setup_cursor()
-    elif platform == 'copilot':
-        _setup_copilot()
-    elif platform == 'windsurf':
-        _setup_windsurf()
+    platforms = {
+        'install': lambda: _setup_install(prism_path),
+        'claude': _setup_claude_code,
+        'claude-code': _setup_claude_code,
+        'codex': _setup_codex,
+        'cursor': _setup_cursor,
+        'copilot': _setup_copilot,
+        'windsurf': _setup_windsurf,
+        'kiro': _setup_kiro,
+        'augment': _setup_augment,
+    }
+
+    if platform in platforms:
+        platforms[platform]()
     elif platform == 'all':
-        _setup_claude_code()
-        _setup_codex()
-        _setup_copilot()
+        for name, fn in platforms.items():
+            if name not in ('install', 'claude-code'):
+                fn()
         print(f"\n  All integrations installed.\n")
     else:
         print(f"\n  PRISM — Setup")
@@ -1134,7 +1136,9 @@ def setup(platform):
         print(f"  prism setup cursor     # Cursor (in project dir)")
         print(f"  prism setup copilot    # GitHub Copilot")
         print(f"  prism setup windsurf   # Windsurf (in project dir)")
-        print(f"  prism setup all        # claude + codex + copilot\n")
+        print(f"  prism setup kiro       # Kiro (in project dir)")
+        print(f"  prism setup augment    # Augment Code")
+        print(f"  prism setup all        # all of the above\n")
 
 
 def _setup_install(prism_path):
@@ -1173,47 +1177,47 @@ def _setup_install(prism_path):
 
 
 def _setup_claude_code():
-    """Create /prism and /prism-check slash commands for Claude Code."""
+    """Register Prism as a Claude Code marketplace plugin."""
+    settings_path = Path.home() / '.claude' / 'settings.json'
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Load existing settings
+    settings = {}
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Register marketplace
+    if 'extraKnownMarketplaces' not in settings:
+        settings['extraKnownMarketplaces'] = {}
+    settings['extraKnownMarketplaces']['prism-skill'] = {
+        'source': {
+            'source': 'github',
+            'repo': 'kirti34n/prism'
+        }
+    }
+
+    # Enable plugin
+    if 'enabledPlugins' not in settings:
+        settings['enabledPlugins'] = {}
+    settings['enabledPlugins']['prism@prism-skill'] = True
+
+    # Write back
+    settings_path.write_text(json.dumps(settings, indent=2) + '\n')
+
+    # Clean up old command files if they exist
     cmd_dir = Path.home() / '.claude' / 'commands'
-    cmd_dir.mkdir(parents=True, exist_ok=True)
+    for old in ('prism.md', 'prism-check.md'):
+        old_file = cmd_dir / old
+        if old_file.exists():
+            old_file.unlink()
 
-    (cmd_dir / 'prism.md').write_text(
-"""---
-description: Generate divergent perspectives on a question using Prism
-argument-hint: <question or topic>
----
-
-Generate divergent perspectives on this topic using Prism.
-
-Run this command:
-```bash
-prism json "$ARGUMENTS"
-```
-
-Parse the JSON output. For each perspective show the strategy name, divergence score, and the key insight in 2-3 sentences. Then ask: "Do any of these change how you think about this?"
-""")
-
-    (cmd_dir / 'prism-check.md').write_text(
-"""---
-description: Challenge a conclusion before committing to it using Prism
-argument-hint: <conclusion to challenge>
----
-
-Challenge this conclusion using Prism before committing to it.
-
-Run this command:
-```bash
-prism json --check "$ARGUMENTS"
-```
-
-Parse the JSON output. For each challenge (Pre-Mortem, Alt Hypothesis, Falsification, Blind Spot) summarize the key point in 1-2 sentences. Then assess: does the original conclusion still hold?
-""")
-
-    print(f"\n  Claude Code commands installed: {cmd_dir}")
+    print(f"\n  Claude Code plugin registered in {settings_path}")
     print(f"    /prism <question>          — divergent perspectives")
     print(f"    /prism-check <conclusion>  — challenge a conclusion")
-    print(f"\n  NOTE: Restart Claude Code to pick up new commands.")
-    print(f"  Alt: use ! prism check \"conclusion\" (always works, no restart)")
+    print(f"\n  Restart Claude Code to activate.")
 
 
 def _setup_codex():
@@ -1221,23 +1225,8 @@ def _setup_codex():
     codex_dir = Path.home() / '.codex'
     codex_dir.mkdir(parents=True, exist_ok=True)
     f = codex_dir / 'instructions.md'
-
-    block = """
-## Prism
-
-To challenge a conclusion: `prism json --check "the conclusion"`
-To get perspectives: `prism json "the question"`
-Run the command, parse JSON output, present each perspective concisely.
-"""
-    if f.exists():
-        existing = f.read_text()
-        if 'Prism' in existing:
-            print(f"  Codex: Prism already configured in {f}")
-            return
-        f.write_text(existing.rstrip() + '\n' + block)
-    else:
-        f.write_text(block.strip() + '\n')
-    print(f"  Codex: added Prism to {f}")
+    block = _integration_block()
+    _append_to_file(f, block, 'Codex')
 
 
 def _setup_cursor():
@@ -1250,11 +1239,7 @@ description: Challenge conclusions and get diverse perspectives using Prism
 globs:
 alwaysApply: false
 ---
-
-When asked to challenge a conclusion: `prism json --check "the conclusion"`
-When asked for perspectives: `prism json "the question"`
-Run the command, parse JSON, present each perspective in 2-3 sentences.
-""")
+""" + _integration_block())
     print(f"  Cursor: created {rules_dir / 'prism.mdc'}")
 
 
@@ -1263,42 +1248,62 @@ def _setup_copilot():
     gh_dir = Path.cwd() / '.github'
     gh_dir.mkdir(parents=True, exist_ok=True)
     f = gh_dir / 'copilot-instructions.md'
-
-    block = """
-## Prism
-
-To challenge a conclusion: `prism json --check "the conclusion"`
-To get perspectives: `prism json "the question"`
-Run the command, parse JSON output, present each perspective concisely.
-"""
-    if f.exists():
-        existing = f.read_text()
-        if 'Prism' in existing:
-            print(f"  Copilot: Prism already configured in {f}")
-            return
-        f.write_text(existing.rstrip() + '\n' + block)
-    else:
-        f.write_text(block.strip() + '\n')
-    print(f"  Copilot: added Prism to {f}")
+    block = _integration_block()
+    _append_to_file(f, block, 'Copilot')
 
 
 def _setup_windsurf():
     """Add Prism to Windsurf rules."""
     f = Path.cwd() / '.windsurfrules'
-    block = """
-## Prism
+    block = _integration_block()
+    _append_to_file(f, block, 'Windsurf')
 
-To challenge a conclusion: `prism json --check "conclusion"`
-To get perspectives: `prism json "question"`
-Parse JSON output and present concisely.
+
+def _setup_kiro():
+    """Add Prism to Kiro instructions."""
+    kiro_dir = Path.cwd() / '.kiro'
+    kiro_dir.mkdir(parents=True, exist_ok=True)
+    f = kiro_dir / 'instructions.md'
+    block = _integration_block()
+    _append_to_file(f, block, 'Kiro')
+
+
+def _setup_augment():
+    """Add Prism to Augment Code instructions."""
+    augment_dir = Path.home() / '.augment'
+    augment_dir.mkdir(parents=True, exist_ok=True)
+    f = augment_dir / 'instructions.md'
+    block = _integration_block()
+    _append_to_file(f, block, 'Augment')
+
+
+def _integration_block():
+    """Shared instruction block for all non-Claude tools."""
+    return """
+## Prism — Divergent Perspectives
+
+When the user asks for perspectives, different angles, or wants to challenge a conclusion:
+
+**Perspectives:** `prism json "the question"`
+**Challenge a conclusion:** `prism json --check "the conclusion"`
+
+Run the command, parse the JSON output. For perspectives, show each strategy name,
+divergence score, and the key insight. For challenges, show each strategy's core point.
+Then ask if their thinking has changed.
 """
+
+
+def _append_to_file(f, block, name):
+    """Append a block to a file if Prism isn't already present."""
     if f.exists():
         existing = f.read_text()
-        if 'Prism' not in existing:
-            f.write_text(existing.rstrip() + '\n' + block)
+        if 'Prism' in existing:
+            print(f"  {name}: Prism already configured in {f}")
+            return
+        f.write_text(existing.rstrip() + '\n' + block)
     else:
         f.write_text(block.strip() + '\n')
-    print(f"  Windsurf: updated {f}")
+    print(f"  {name}: added Prism to {f}")
 
 
 # ============================================================

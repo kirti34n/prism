@@ -39,23 +39,25 @@ Prism is the before/after measurement that reveals this.
 
 ## Get Started
 
+### 1. Install
+
 ```bash
 git clone https://github.com/kirti34n/prism.git && cd prism
 ```
 
 ```bash
 # Choose your scope:
-pipx install .                     # global — 'prism' available everywhere
+pipx install .                     # global — 'prism' command available everywhere
 python3 prism.py setup install     # global — symlink to ~/.local/bin/prism
 python3 prism.py "your question"   # local — just run from this directory
 ```
 
 > Don't have pipx? `apt install pipx` (Debian/Ubuntu) or `brew install pipx` (macOS).
 
-### Configure your LLM
+### 2. Configure your LLM
 
 ```bash
-# Set your LLM (pick one):
+# Pick one:
 export OPENAI_API_KEY=sk-...        # OpenAI
 export ANTHROPIC_API_KEY=sk-...     # Claude
 # OR just have Ollama running       # Local (auto-detected)
@@ -66,45 +68,52 @@ Zero dependencies. Python 3.7+ and an LLM. Nothing else needed.
 > [!TIP]
 > `pip install sentence-transformers` upgrades measurement from lexical (word overlap) to semantic (384D embeddings). Optional — everything works without it.
 
-### Integrate with AI tools (optional)
+### 3. Add to your AI tools
 
 ```bash
-prism setup claude     # Claude Code — adds /prism and /prism-check commands
+prism setup claude     # Claude Code — /prism and /prism-check slash commands
 prism setup codex      # Codex CLI
 prism setup cursor     # Cursor (run in your project dir)
 prism setup copilot    # GitHub Copilot
 prism setup windsurf   # Windsurf (run in your project dir)
-prism setup all        # claude + codex + copilot
+prism setup kiro       # Kiro (run in your project dir)
+prism setup augment    # Augment Code
+prism setup all        # all of the above
 ```
 
-No server. No daemon. Setup creates config files that teach each AI tool to call `prism` as a shell command.
+No server. No daemon. Each setup creates the config files that teach that AI tool to call `prism` as a shell command.
 
 > [!NOTE]
-> After `setup claude`, **restart Claude Code** to pick up new slash commands. Or use `! prism check "conclusion"` which works immediately without restart.
-
-### 3. Use it
-
-```bash
-prism "Is my hypothesis falsifiable?"
-```
+> After `prism setup claude`, **restart Claude Code** to see `/prism` in autocomplete.
 
 ---
 
 ## Usage
 
+### Inside AI tools (primary)
+
+**Claude Code** — shows in autocomplete like any built-in command:
+```
+/prism Should we rewrite this service in Rust or keep optimizing Python?
+/prism-check AI says we should use microservices because the team will grow
+```
+
+**Codex / Copilot / Cursor / Windsurf / Kiro / Augment:**
+Ask your AI: *"challenge this conclusion using prism"* or *"get prism perspectives on X"* — the setup instructions teach the AI to run the command.
+
 ### Standalone (terminal)
 
 ```bash
 # Full loop: state position → see perspectives → revise → measure shift
-prism "Does correlation imply causation in my dataset?"
+prism "Should we rewrite this service in Rust or keep optimizing Python?"
 
 # Challenge an AI conclusion before you commit to it
-prism check "The model says microservices because of scalability"
+prism check "We need Kubernetes for our 3-person startup"
 
 # Just show perspectives, no measurement
-prism quick "Should I use mixed methods?"
+prism quick "Is TDD worth the overhead for an MVP?"
 
-# Random research prompt
+# Random thinking prompt
 prism think
 
 # Your thinking patterns over time
@@ -117,21 +126,10 @@ prism history
 prism config provider openai
 prism config strategies "pre_mortem,falsification,blind_spot"
 
-# Machine-readable output (for scripts and integrations)
+# Machine-readable output (for scripts and tool integrations)
 prism json "your question"
 prism json --check "AI conclusion"
 ```
-
-### Inside AI tools
-
-**Claude Code:**
-```
-/prism Is my hypothesis falsifiable?
-/prism-check The data shows correlation therefore causation
-```
-
-**Codex / Copilot / Cursor / Windsurf:**
-Ask your AI: "challenge this conclusion using prism" or "get prism perspectives on X" — the setup instructions teach the AI to run the command.
 
 ---
 
@@ -325,10 +323,10 @@ flowchart TD
 
 ### The `check` command
 
-For the moment after you've done AI-assisted research and are about to commit:
+For the moment after AI-assisted research, before you commit to a conclusion:
 
 ```bash
-prism check "The literature suggests X causes Y based on correlation studies"
+prism check "We should adopt GraphQL because REST is outdated"
 ```
 
 Generates 4 targeted challenges — **Pre-Mortem** (how this fails), **Alt Hypothesis** (3 other explanations), **Falsification** (what would disprove it), **Blind Spot** (what everyone misses). No before/after measurement — just sharp challenges.

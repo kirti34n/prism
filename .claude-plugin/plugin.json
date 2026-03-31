@@ -1,0 +1,12 @@
+{
+  "name": "prism",
+  "description": "See how AI changes your thinking. Generate divergent perspectives using research-backed cognitive strategies, or challenge conclusions before committing.",
+  "version": "2.1.0",
+  "author": {
+    "name": "keerti"
+  },
+  "skills": [
+    "./skills/prism",
+    "./skills/prism-check"
+  ]
+}
