@@ -128,6 +128,175 @@ Ask your AI: "challenge this conclusion using prism" or "get prism perspectives 
 
 ---
 
+## Examples
+
+### `prism explore` — the full measurement loop
+
+```
+$ prism "Does social media cause depression in teenagers?"
+
+  PRISM
+  ========================================================
+  Does social media cause depression in teenagers?
+  ========================================================
+
+  Your position (before seeing anything):
+  > Yes, the evidence from multiple studies shows a clear link
+  Confidence (1-10): 8
+
+  Generating perspectives (openai/gpt-4o-mini)...
+  [1/5] Default — done
+  [2/5] Pre-Mortem — done
+  [3/5] Blind Spot — done
+  [4/5] First Principles — done
+  [5/5] Systems — done
+
+  ────────────────────────────────────────────────────────
+  DEFAULT ANSWER
+  ────────────────────────────────────────────────────────
+    Social media can contribute to depression in teenagers, but it is
+    not the sole cause. Research suggests a complex relationship where
+    factors like cyberbullying, social comparison, and exposure to
+    unrealistic standards may increase feelings of anxiety and low
+    self-esteem. However, the impact varies by individual...
+
+  ────────────────────────────────────────────────────────
+  1. SYSTEMS (distance: 0.172)
+  ────────────────────────────────────────────────────────
+    Second-order: Increased depression leads to heightened isolation
+    and reduced real-world social engagement.
+    Third-order: Prolonged isolation undermines development of emotional
+    resilience and coping skills, making teens vulnerable to chronic
+    mental health struggles persisting into adulthood.
+    Fourth-order: A generation with diminished resilience faces reduced
+    workforce productivity, higher healthcare costs, and strained
+    interpersonal relationships.
+
+  ────────────────────────────────────────────────────────
+  2. BLIND SPOT (distance: 0.126)
+  ────────────────────────────────────────────────────────
+    Most people assume a direct causal link, ignoring the bidirectional
+    nature: teens already struggling with mental health may use social
+    media more to cope, creating a feedback loop. Factors like
+    socioeconomic status and family dynamics mediate the impact but are
+    rarely considered in simplistic narratives.
+
+  ────────────────────────────────────────────────────────
+  3. FIRST PRINCIPLES (distance: 0.112)
+  ────────────────────────────────────────────────────────
+    Assumption 1: "Social media is inherently harmful." What if it's a
+    tool whose impact depends on how it's used?
+    Assumption 2: "The link is direct and causal." What about reverse
+    causation — depressed teens using social media more to cope?
+    Assumption 3: "All platforms have the same impact." Instagram's
+    visual focus vs Reddit's forums produce very different effects.
+
+  ────────────────────────────────────────────────────────
+  Same position? Changed? Or a different question entirely:
+  > What factors mediate the relationship between social media use and teen mental health?
+  Confidence (1-10): 5
+
+  ========================================================
+  MEASUREMENT (semantic)
+  ========================================================
+
+  Session: reframing
+  You asked a different question — frame shift
+  Confidence: 8 → 5 (-3)
+  Text shift: 0.4231
+  Direction: independent
+  Independence: 78%
+
+  Most useful? (1=Systems, 2=Blind Spot, 3=First Principles, Enter to skip)
+  > 2
+
+  Session logged. Run 'prism insights' for patterns.
+```
+
+The user started confident (8/10) that social media causes depression. After seeing the Blind Spot perspective (bidirectional causation), they **reframed the question entirely** and their confidence dropped to 5. Prism classified this as the deepest type of shift: **reframing**.
+
+---
+
+### `prism check` — challenge an AI conclusion
+
+```
+$ prism check "LLMs understand meaning because they generate coherent text"
+
+  PRISM — Challenge
+  ========================================================
+  LLMs understand meaning because they generate coherent text
+  ========================================================
+
+  ────────────────────────────────────────────────────────
+  PRE-MORTEM
+  ────────────────────────────────────────────────────────
+    The core failure: conflating surface-level pattern recognition with
+    semantic comprehension. The model generates text that sounds meaningful
+    but lacks grounding in factual knowledge or causal reasoning. The
+    "hallucination problem" — systematic fabrication of information —
+    was dismissed as edge cases despite being ubiquitous.
+
+  ────────────────────────────────────────────────────────
+  ALT HYPOTHESIS
+  ────────────────────────────────────────────────────────
+    1. Statistical pattern matching: coherence from learned regularities,
+       not comprehension. Test: does it fail tasks requiring reasoning?
+    2. Emergent syntactic regularity: grammatically correct but semantically
+       hollow. Test: does it produce correct-sounding nonsense?
+    3. Internal representations: actual abstract concepts encoded in
+       weights. Test: can it reason about novel scenarios?
+
+  ────────────────────────────────────────────────────────
+  BLIND SPOT
+  ────────────────────────────────────────────────────────
+    Coherence and fluency are not understanding. People see a model write
+    an essay on quantum physics and assume it "gets" the content, ignoring
+    the lack of causal reasoning or semantic depth. The output is mimicry
+    of patterns, not comprehension of meaning.
+
+  Does the conclusion still hold?
+```
+
+Three challenges, each from a different angle. No before/after measurement — just sharp challenges to read before you commit to the conclusion.
+
+---
+
+### `prism insights` — patterns over time
+
+```
+$ prism insights
+
+  PRISM — Insights
+  ────────────────────────────────────────
+  Sessions: 14
+
+  Session types:
+           destabilization: 5  (doubt)
+              reconceptualization: 3  (new thinking)
+                reframing: 2  (frame shift)
+                 adoption: 2  (toward AI)
+                 unshaken: 2  (no change)
+
+  Confidence change: -1.8 average (14 measured)
+    Prism is creating productive doubt
+
+  What challenges you (deep shift rate):
+            Pre-Mortem:  80% (5 sessions) |################|
+            Blind Spot:  60% (5 sessions) |############|
+         Falsification:  50% (4 sessions) |##########|
+        Adjacent Field:  33% (3 sessions) |######|
+       Devil's Advocate: 25% (4 sessions) |#####|
+
+  Independence: 64% average
+
+  Convergence (last 14 sessions):
+    DIVERGING (slope: 0.0187) — increasingly independent
+```
+
+After 14 sessions: Pre-Mortem is the strategy that challenges this user most (80% deep shift rate). Average confidence drops 1.8 points per session — productive doubt. The user is diverging from AI defaults over time.
+
+---
+
 ## How It Works
 
 ```mermaid
