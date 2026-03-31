@@ -961,6 +961,7 @@ def config_cmd(args):
     if len(args) < 2:
         print(f"  {key}: {merged.get(key, '(not set)')}")
         return
+
     val = ' '.join(args[1:])
     if key == 'temperature':
         val = float(val)
@@ -969,9 +970,32 @@ def config_cmd(args):
     elif key == 'strategies':
         if val != 'auto':
             val = [s.strip() for s in val.split(',')]
-    global_cfg[key] = val
-    _save_global_config(global_cfg)
-    print(f"  {key} = {val}")
+
+    # Ask user: global or project-level?
+    target = 'global'
+    if sys.stdin.isatty():
+        try:
+            choice = input("  Save to (g)lobal or (p)roject? [g]: ").strip().lower()
+            if choice in ('p', 'project'):
+                target = 'project'
+        except (EOFError, KeyboardInterrupt):
+            pass
+
+    if target == 'project':
+        proj_file = Path.cwd() / '.prism.json'
+        proj = {}
+        if proj_file.exists():
+            try:
+                proj = json.loads(proj_file.read_text())
+            except:
+                pass
+        proj[key] = val
+        proj_file.write_text(json.dumps(proj, indent=2))
+        print(f"  {key} = {val}  (project: {proj_file})")
+    else:
+        global_cfg[key] = val
+        _save_global_config(global_cfg)
+        print(f"  {key} = {val}  (global: {CONFIG_DIR / 'config.json'})")
 
 
 def reset():
