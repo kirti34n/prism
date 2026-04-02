@@ -498,7 +498,12 @@ def _select_strategies(state, config):
     remaining = [s[0] for s in scored if s[0] not in top]
     n_explore = min(n - len(top), len(remaining))
     explore_picks = random.sample(remaining, n_explore) if n_explore > 0 else []
-    return (top + explore_picks)[:n]
+    selected = (top + explore_picks)[:n]
+    # Force at least 1 from bottom half (convergence protection)
+    bottom_half = [s[0] for s in scored[len(scored)//2:]]
+    if not any(s in bottom_half for s in selected):
+        selected[-1] = random.choice(bottom_half)
+    return selected
 
 
 def _generate_perspectives(question, strategies, config, quiet=False):
@@ -640,6 +645,17 @@ def _update_weights(state: dict, shown: list[str], rated: str | None,
         target = direction.replace('toward_', '')
         if target in w:
             w[target] = w.get(target, 1.0) * 1.05
+    # Cap weight ratio: no strategy exceeds 3x the lowest
+    if w:
+        min_w = min(w.values())
+        for key in w:
+            w[key] = min(w[key], min_w * 3.0)
+    # Every 25 sessions, pull extreme weights 20% toward mean
+    n_sessions = len(state.get('sessions', []))
+    if n_sessions > 0 and n_sessions % 25 == 0 and w:
+        mean_w = sum(w.values()) / len(w)
+        for key in w:
+            w[key] = w[key] * 0.8 + mean_w * 0.2
     # Normalize: weights average to 1.0, clamp to [0.1, 5.0]
     total = sum(w.values())
     n_keys = len(w)
