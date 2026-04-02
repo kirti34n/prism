@@ -290,5 +290,138 @@ class TestPrintWrapped(unittest.TestCase):
         self.assertGreater(len(lines), 1)
 
 
+class TestContrastiveScaffolding(unittest.TestCase):
+    def test_generate_perspectives_passes_default_to_strategies(self):
+        """Contrastive prefix should include default response text."""
+        calls = []
+        def mock_llm(system, user, config):
+            calls.append({'system': system, 'user': user})
+            return 'mock response'
+        original = neti._llm_call
+        neti._llm_call = mock_llm
+        try:
+            results = neti._generate_perspectives(
+                'test question', ['devils_advocate'], {'provider': 'mock', 'max_tokens': 100}, quiet=True)
+        finally:
+            neti._llm_call = original
+        # First call is default, second is the strategy
+        self.assertGreaterEqual(len(calls), 2)
+        strategy_call = calls[-1]
+        self.assertIn('conventional AI answer', strategy_call['user'])
+        self.assertIn('mock response', strategy_call['user'])
+
+
+class TestConvergenceProtection(unittest.TestCase):
+    def test_bottom_half_forced(self):
+        """At least 1 strategy from bottom half should be included."""
+        weights = {k: 1.0 for k in neti.STRATEGY_KEYS}
+        # Make first 5 very high, rest very low
+        for i, k in enumerate(neti.STRATEGY_KEYS):
+            weights[k] = 5.0 if i < 5 else 0.2
+        state = {'strategy_weights': weights, 'sessions': []}
+        config = {'strategies': 'auto', 'num_perspectives': 4}
+        bottom_half = neti.STRATEGY_KEYS[len(neti.STRATEGY_KEYS)//2:]
+        # Run multiple times to check it's not just luck
+        found_bottom = False
+        for _ in range(20):
+            result = neti._select_strategies(state, config)
+            if any(s in bottom_half for s in result):
+                found_bottom = True
+                break
+        self.assertTrue(found_bottom, "Bottom-half strategy never selected in 20 tries")
+
+    def test_weight_ratio_cap(self):
+        """No weight should exceed 3x the lowest after update."""
+        state = {
+            'strategy_weights': {k: 1.0 for k in neti.STRATEGY_KEYS},
+            'sessions': [],
+        }
+        # Boost one strategy heavily
+        for _ in range(50):
+            neti._update_weights(state, ['pre_mortem'], 'pre_mortem', 'reframing', 'stable')
+        w = state['strategy_weights']
+        min_w = min(w.values())
+        max_w = max(w.values())
+        self.assertLessEqual(max_w, min_w * 3.0 + 0.01)
+
+    def test_no_monoculture_after_100_sessions(self):
+        """After 100 sessions favoring one strategy, diversity should survive."""
+        state = {
+            'strategy_weights': {k: 1.0 for k in neti.STRATEGY_KEYS},
+            'sessions': [{'session_type': 'reframing'}] * 100,
+        }
+        for _ in range(100):
+            neti._update_weights(state, ['pre_mortem'], 'pre_mortem', 'reframing', 'stable')
+        w = state['strategy_weights']
+        ratio = max(w.values()) / min(w.values())
+        self.assertLess(ratio, 4.0, "Weight ratio too extreme after 100 sessions")
+
+
+class TestReframingDetection(unittest.TestCase):
+    def test_reframing_without_question_mark(self):
+        """Semantic mode should detect reframing without '?' when before_text provided."""
+        if not neti._load_embedder():
+            self.skipTest("No embedder available")
+        result = neti._classify_session(
+            conf_before=7, conf_after=6, shift=0.3,
+            direction='independent',
+            after_text='I think the real issue is team communication not the technology choice',
+            question='Should we use GraphQL or REST?',
+            before_text='REST is better because it is simpler',
+        )
+        self.assertEqual(result, 'reframing')
+
+    def test_lexical_fallback_requires_question_mark(self):
+        """Without embedder or before_text, '?' heuristic should be used."""
+        # Force lexical mode by not providing before_text
+        result = neti._classify_session(
+            conf_before=7, conf_after=6, shift=0.3,
+            direction='independent',
+            after_text='I think the real issue is team communication not the technology choice',
+            question='Should we use GraphQL or REST?',
+            before_text=None,
+        )
+        # Without '?' in after_text and no before_text, should NOT be reframing
+        self.assertNotEqual(result, 'reframing')
+
+
+class TestActiveConvergenceResponse(unittest.TestCase):
+    def test_high_adoption_triggers_random(self):
+        """>50% adoption in last 10 sessions should trigger full random."""
+        state = {
+            'strategy_weights': {k: 1.0 for k in neti.STRATEGY_KEYS},
+            'sessions': [{'session_type': 'adoption'}] * 8 + [{'session_type': 'shift'}] * 2,
+        }
+        # Make weights very unequal to test that randomization overrides them
+        state['strategy_weights']['pre_mortem'] = 5.0
+        config = {'strategies': 'auto', 'num_perspectives': 4}
+        import io, sys
+        captured = io.StringIO()
+        sys.stdout = captured
+        try:
+            results = set()
+            for _ in range(30):
+                result = neti._select_strategies(state, config)
+                results.update(result)
+        finally:
+            sys.stdout = sys.__stdout__
+        # With random selection over 30 tries, should see many different strategies
+        self.assertGreater(len(results), 4, "Randomization should produce variety")
+        self.assertIn('diversifying', captured.getvalue())
+
+    def test_low_adoption_no_trigger(self):
+        """<=50% adoption should not trigger randomization."""
+        state = {
+            'strategy_weights': {k: 1.0 for k in neti.STRATEGY_KEYS},
+            'sessions': [{'session_type': 'adoption'}] * 3 + [{'session_type': 'shift'}] * 7,
+        }
+        state['strategy_weights']['pre_mortem'] = 5.0
+        state['strategy_weights']['blind_spot'] = 4.0
+        config = {'strategies': 'auto', 'num_perspectives': 4}
+        result = neti._select_strategies(state, config)
+        # Should still use weighted selection, not random
+        self.assertIn('pre_mortem', result[:2])
+
+
 if __name__ == '__main__':
     unittest.main()
