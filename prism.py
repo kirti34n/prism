@@ -489,6 +489,10 @@ def _select_strategies(state, config):
             return valid[:n]
     weights = state.get('strategy_weights', {})
     scored = [(k, weights.get(k, 1.0)) for k in STRATEGY_KEYS]
+    # Cold start: when all weights are equal, fully randomize
+    unique_weights = set(w for _, w in scored)
+    if len(unique_weights) <= 1:
+        return random.sample([k for k, _ in scored], min(n, len(scored)))
     scored.sort(key=lambda x: x[1], reverse=True)
     top = [s[0] for s in scored[:min(2, len(scored))]]
     remaining = [s[0] for s in scored if s[0] not in top]

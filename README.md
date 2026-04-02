@@ -14,10 +14,10 @@ Every time you ask an AI a question, the answer reshapes how you think about the
 
 **Prism makes this visible.**
 
-It forces you to state your position and confidence *before* seeing any AI output. Then it generates structurally different perspectives (not just rephrasing — structural constraints backed by cognitive science). Then it asks you again. The difference between your before and after — your confidence change, whether you reframed the question, whether you drifted toward the AI's default — tells you something no other tool measures: **how much is AI shaping your thinking, and are you aware of it?**
+It forces you to state your position and confidence *before* seeing any AI output. Then it generates structurally different perspectives (not just rephrasing — structural constraints backed by cognitive science). Then it asks you again. The difference between your before and after — your confidence change, whether you reframed the question, whether you drifted toward the AI's default — **reveals how much AI is shaping your thinking, and whether you're aware of it.**
 
 > [!IMPORTANT]
-> **This is not a better way to get AI answers.** If you want better AI outputs, use multi-agent systems, RAG pipelines, chain-of-thought — there are excellent tools for that ([LLM Council](https://github.com/karpathy/llm-council), [llm-consortium](https://github.com/irthomasthomas/llm-consortium), [STORM](https://github.com/stanford-oval/storm)). Prism is a **measurement instrument**. The perspectives are the experiment. The finding is what happens to *you*.
+> **This is not a better way to get AI answers.** If you want better AI outputs, use multi-agent systems, RAG pipelines, chain-of-thought — there are excellent tools for that ([LLM Council](https://github.com/karpathy/llm-council), [llm-consortium](https://github.com/irthomasthomas/llm-consortium), [STORM](https://github.com/stanford-oval/storm)). Prism is a **thinking audit tool**. The perspectives are the experiment. The finding is what happens to *you*.
 
 ---
 
@@ -34,7 +34,7 @@ You type a research question. An AI gives you an elaborate, well-structured answ
 
 The AI didn't make you think better. It made you think *its way*. And the longer the process looked, the more you trusted the result.
 
-Prism is the before/after measurement that reveals this.
+Prism is the before/after audit that reveals this.
 
 ---
 
@@ -93,7 +93,7 @@ prism setup all        # all of the above
 
 Each setup generates a **self-contained instruction file** — the full Prism methodology baked into the AI tool's native config format. The AI applies it using its own model. **No CLI binary needed at runtime. No PATH, no API keys, no subprocess.**
 
-If the CLI *is* installed, tools use it automatically (for measurement and history tracking). If not, everything still works — you just don't get the tracking.
+If the CLI *is* installed, tools use it automatically for the full audit loop — before/after measurement, history tracking, and `prism insights`. If not, you still get the perspectives and methodology — you just don't get the tracking.
 
 > [!NOTE]
 > After `prism setup claude`, **restart Claude Code** to see `/prism` in autocomplete.
@@ -425,7 +425,7 @@ Honest answer: **partially.**
 - **Forcing articulation** — stating your position clearly before seeing AI is valuable whether the question is simple or frontier research
 - **Confidence tracking** — knowing your confidence went from 8 to 5 is meaningful regardless of domain
 - **Pre-mortem and falsification** — these challenge the FRAME, not the content, so they work even when the LLM doesn't deeply understand your niche
-- **The measurement** — knowing you drifted toward the AI default is valuable at any complexity
+- **The audit** — knowing you drifted toward the AI default is valuable at any complexity
 
 **What doesn't scale as well:**
 - **Perspective quality** — for cutting-edge research, the LLM may generate textbook-level challenges, not frontier-level ones
@@ -544,7 +544,7 @@ Available: `devils_advocate`, `blind_spot`, `first_principles`, `inversion`, `sy
 
 This is a side project, built and improved in free time. The code is minimal, the scope is deliberately narrow, and there are no plans to turn this into a product or service.
 
-But the findings are real. If you use Prism for a few sessions and look at your insights, you'll see patterns in how AI is shaping your thinking — your confidence changes, your tendency to adopt or resist AI framing, which types of challenges actually move you. That data is yours, it stays on your machine, and it tells you something no other tool measures.
+But the findings are real. If you use Prism for a few sessions and look at your insights, you'll see patterns in how AI is shaping your thinking — your confidence changes, your tendency to adopt or resist AI framing, which types of challenges actually move you. That data is yours, and it stays on your machine.
 
 Contributions, feedback, and research collaborations welcome.
 
@@ -554,11 +554,11 @@ Contributions, feedback, and research collaborations welcome.
 
 Born from [SPARK](https://github.com/kirti34n/spark) — 18 versions of testing computational creativity tools. Every version proved: scaffolds don't work, evolution converges, multi-model disagreement is mostly style not substance.
 
-But one thing was never measured: **what does the AI's default response do to the human asking the question?**
+But one thing was never examined: **what does the AI's default response do to the human asking the question?**
 
 Not what the AI outputs. What happens to *you*.
 
-Prism measures that.
+Prism makes that visible.
 
 ---
 
