@@ -1,4 +1,6 @@
-# Prism
+# Neti
+
+**neti neti** — "not this, not this." Find truth by negating what it isn't.
 
 **See how AI is changing how you think — before you realize it.**
 
@@ -12,12 +14,12 @@
 
 Every time you ask an AI a question, the answer reshapes how you think about the problem — your framing, your confidence, your sense of what matters. You don't notice. Nobody does. The response sounds reasonable, the process felt rigorous, so you accept the frame and move on.
 
-**Prism makes this visible.**
+**Neti makes this visible.**
 
 It forces you to state your position and confidence *before* seeing any AI output. Then it generates structurally different perspectives (not just rephrasing — structural constraints backed by cognitive science). Then it asks you again. The difference between your before and after — your confidence change, whether you reframed the question, whether you drifted toward the AI's default — **reveals how much AI is shaping your thinking, and whether you're aware of it.**
 
 > [!IMPORTANT]
-> **This is not a better way to get AI answers.** If you want better AI outputs, use multi-agent systems, RAG pipelines, chain-of-thought — there are excellent tools for that ([LLM Council](https://github.com/karpathy/llm-council), [llm-consortium](https://github.com/irthomasthomas/llm-consortium), [STORM](https://github.com/stanford-oval/storm)). Prism is a **thinking audit tool**. The perspectives are the experiment. The finding is what happens to *you*.
+> **This is not a better way to get AI answers.** If you want better AI outputs, use multi-agent systems, RAG pipelines, chain-of-thought — there are excellent tools for that ([LLM Council](https://github.com/karpathy/llm-council), [llm-consortium](https://github.com/irthomasthomas/llm-consortium), [STORM](https://github.com/stanford-oval/storm)). Neti is a **thinking audit tool**. The perspectives are the experiment. The finding is what happens to *you*.
 
 ---
 
@@ -34,7 +36,7 @@ You type a research question. An AI gives you an elaborate, well-structured answ
 
 The AI didn't make you think better. It made you think *its way*. And the longer the process looked, the more you trusted the result.
 
-Prism is the before/after audit that reveals this.
+Neti is the before/after audit that reveals this.
 
 ---
 
@@ -43,14 +45,14 @@ Prism is the before/after audit that reveals this.
 ### 1. Install
 
 ```bash
-git clone https://github.com/kirti34n/prism.git && cd prism
+git clone https://github.com/kirti34n/neti.git && cd neti
 ```
 
 ```bash
 # Choose your scope:
-pipx install .                     # global — 'prism' command available everywhere
-python3 prism.py setup install     # global — symlink to ~/.local/bin/prism
-python3 prism.py "your question"   # local — just run from this directory
+pipx install .                     # global — 'neti' command available everywhere
+python3 neti.py setup install     # global — symlink to ~/.local/bin/neti
+python3 neti.py "your question"   # local — just run from this directory
 ```
 
 > Don't have pipx? `apt install pipx` (Debian/Ubuntu) or `brew install pipx` (macOS).
@@ -74,29 +76,29 @@ Zero dependencies. Python 3.7+ and an LLM. Nothing else needed.
 ### 3. Add to your AI tools
 
 ```bash
-prism setup            # auto-detect installed tools, set up all at once
+neti setup            # auto-detect installed tools, set up all at once
 ```
 
 Or pick individually:
 
 ```bash
-prism setup claude     # Claude Code — /prism, /prism-check, auto-trigger
-prism setup cursor     # Cursor
-prism setup codex      # Codex CLI
-prism setup copilot    # GitHub Copilot
-prism setup windsurf   # Windsurf
-prism setup kiro       # Kiro
-prism setup gemini     # Gemini CLI
-prism setup augment    # Augment Code
-prism setup all        # all of the above
+neti setup claude     # Claude Code — /neti, /neti-check, auto-trigger
+neti setup cursor     # Cursor
+neti setup codex      # Codex CLI
+neti setup copilot    # GitHub Copilot
+neti setup windsurf   # Windsurf
+neti setup kiro       # Kiro
+neti setup gemini     # Gemini CLI
+neti setup augment    # Augment Code
+neti setup all        # all of the above
 ```
 
-Each setup generates a **self-contained instruction file** — the full Prism methodology baked into the AI tool's native config format. The AI applies it using its own model. **No CLI binary needed at runtime. No PATH, no API keys, no subprocess.**
+Each setup generates a **self-contained instruction file** — the full Neti methodology baked into the AI tool's native config format. The AI applies it using its own model. **No CLI binary needed at runtime. No PATH, no API keys, no subprocess.**
 
-If the CLI *is* installed, tools use it automatically for the full audit loop — before/after measurement, history tracking, and `prism insights`. If not, you still get the perspectives and methodology — you just don't get the tracking.
+If the CLI *is* installed, tools use it automatically for the full audit loop — before/after measurement, history tracking, and `neti insights`. If not, you still get the perspectives and methodology — you just don't get the tracking.
 
 > [!NOTE]
-> After `prism setup claude`, **restart Claude Code** to see `/prism` in autocomplete.
+> After `neti setup claude`, **restart Claude Code** to see `/neti` in autocomplete.
 
 ---
 
@@ -106,11 +108,11 @@ If the CLI *is* installed, tools use it automatically for the full audit loop �
 
 **Claude Code** — shows in autocomplete like any built-in command:
 ```
-/prism Should we rewrite this service in Rust or keep optimizing Python?
-/prism-check AI says we should use microservices because the team will grow
+/neti Should we rewrite this service in Rust or keep optimizing Python?
+/neti-check AI says we should use microservices because the team will grow
 ```
 
-Claude Code also auto-triggers lightweight Prism perspectives when you're making decisions ("should we...", "which approach...", "is it better to...").
+Claude Code also auto-triggers lightweight Neti perspectives when you're making decisions ("should we...", "which approach...", "is it better to...").
 
 **Cursor / Codex / Copilot / Windsurf / Kiro / Gemini CLI / Augment:**
 The generated instruction file teaches the AI the full methodology. Ask naturally: *"challenge this conclusion"* or *"get different perspectives on X"* — or the AI triggers it automatically when you're evaluating approaches.
@@ -119,42 +121,45 @@ The generated instruction file teaches the AI the full methodology. Ask naturall
 
 ```bash
 # Full loop: state position → see perspectives → revise → measure shift
-prism "Should we rewrite this service in Rust or keep optimizing Python?"
+neti "Should we rewrite this service in Rust or keep optimizing Python?"
 
 # Challenge an AI conclusion before you commit to it
-prism check "We need Kubernetes for our 3-person startup"
+neti check "We need Kubernetes for our 3-person startup"
+
+# Deep research: 5 perspectives, longer output, forced critical strategies
+neti research "Should we use GraphQL for our API redesign?"
 
 # Just show perspectives, no measurement
-prism quick "Is TDD worth the overhead for an MVP?"
+neti quick "Is TDD worth the overhead for an MVP?"
 
 # Random thinking prompt
-prism think
+neti think
 
 # Your thinking patterns over time
-prism insights
+neti insights
 
 # Recent sessions
-prism history
+neti history
 
 # Configuration
-prism config provider openai
-prism config strategies "pre_mortem,falsification,blind_spot"
+neti config provider openai
+neti config strategies "pre_mortem,falsification,blind_spot"
 
 # Machine-readable output (for scripts and tool integrations)
-prism json "your question"
-prism json --check "AI conclusion"
+neti json "your question"
+neti json --check "AI conclusion"
 ```
 
 ---
 
 ## Examples
 
-### `prism explore` — the full measurement loop
+### `neti explore` — the full measurement loop
 
 ```
-$ prism "Does social media cause depression in teenagers?"
+$ neti "Does social media cause depression in teenagers?"
 
-  PRISM
+  NETI
   ========================================================
   Does social media cause depression in teenagers?
   ========================================================
@@ -229,19 +234,19 @@ $ prism "Does social media cause depression in teenagers?"
   Most useful? (1=Systems, 2=Blind Spot, 3=First Principles, Enter to skip)
   > 2
 
-  Session logged. Run 'prism insights' for patterns.
+  Session logged. Run 'neti insights' for patterns.
 ```
 
-The user started confident (8/10) that social media causes depression. After seeing the Blind Spot perspective (bidirectional causation), they **reframed the question entirely** and their confidence dropped to 5. Prism classified this as the deepest type of shift: **reframing**.
+The user started confident (8/10) that social media causes depression. After seeing the Blind Spot perspective (bidirectional causation), they **reframed the question entirely** and their confidence dropped to 5. Neti classified this as the deepest type of shift: **reframing**.
 
 ---
 
-### `prism check` — challenge an AI conclusion
+### `neti check` — challenge an AI conclusion
 
 ```
-$ prism check "LLMs understand meaning because they generate coherent text"
+$ neti check "LLMs understand meaning because they generate coherent text"
 
-  PRISM — Challenge
+  NETI — Challenge
   ========================================================
   LLMs understand meaning because they generate coherent text
   ========================================================
@@ -280,12 +285,12 @@ Three challenges, each from a different angle. No before/after measurement — j
 
 ---
 
-### `prism insights` — patterns over time
+### `neti insights` — patterns over time
 
 ```
-$ prism insights
+$ neti insights
 
-  PRISM — Insights
+  NETI — Insights
   ────────────────────────────────────────
   Sessions: 14
 
@@ -297,7 +302,7 @@ $ prism insights
                  unshaken: 2  (no change)
 
   Confidence change: -1.8 average (14 measured)
-    Prism is creating productive doubt
+    Neti is creating productive doubt
 
   What challenges you (deep shift rate):
             Pre-Mortem:  80% (5 sessions) |################|
@@ -322,7 +327,7 @@ After 14 sessions: Pre-Mortem is the strategy that challenges this user most (80
 flowchart TD
     A["Your question"] --> B["State your position"]
     B --> C["Rate confidence 1-10"]
-    C --> D["Prism generates perspectives via your LLM"]
+    C --> D["Neti generates perspectives via your LLM"]
     D --> E["Ranks by divergence from default"]
     E --> F["Shows top 3 most different"]
     F --> G["Revise your position — or ask a different question"]
@@ -341,14 +346,14 @@ flowchart TD
 For the moment after AI-assisted research, before you commit to a conclusion:
 
 ```bash
-prism check "We should adopt GraphQL because REST is outdated"
+neti check "We should adopt GraphQL because REST is outdated"
 ```
 
 Generates 4 targeted challenges — **Pre-Mortem** (how this fails), **Alt Hypothesis** (3 other explanations), **Falsification** (what would disprove it), **Blind Spot** (what everyone misses). No before/after measurement — just sharp challenges.
 
 ---
 
-## What Prism Measures
+## What Neti Measures
 
 > [!NOTE]
 > The goal is not to provide better AI answers. The goal is to make visible how AI's default response is already shaping your thinking — your framing, your confidence, your assumptions — without you realizing it.
@@ -373,10 +378,10 @@ Each session is classified by what happened to your thinking:
 - **Direction**: Did you move toward a perspective, toward the default, or into independent territory?
 - **Session type**: The classification above — based on confidence + text + direction together
 
-### Over time (`prism insights`)
+### Over time (`neti insights`)
 
 - **Session type distribution**: Are you mostly reframing (good) or mostly adopting (concerning)?
-- **Confidence trends**: Is Prism creating productive doubt, or increasing false confidence?
+- **Confidence trends**: Is Neti creating productive doubt, or increasing false confidence?
 - **Strategy effectiveness**: Which perspectives actually challenge YOUR thinking — ranked by deep shift rate
 - **Convergence tracking**: Are you moving closer to AI defaults over time? (the sycophancy detector)
 
@@ -413,7 +418,7 @@ Not role-playing ("pretend you're a contrarian"). **Structural constraints** bac
 
 **Two modes:**
 - **Auto** (default): System learns which strategies shift YOUR thinking most. Weighted selection with random exploration.
-- **Manual**: `prism config strategies "pre_mortem,falsification,blind_spot"` — predictable and cheaper.
+- **Manual**: `neti config strategies "pre_mortem,falsification,blind_spot"` — predictable and cheaper.
 
 ---
 
@@ -433,7 +438,7 @@ Honest answer: **partially.**
 - **Alternative hypotheses** — may be obvious to domain experts
 
 > [!WARNING]
-> Prism's perspectives come from the same kind of model that gave you the default answer. Structural constraints force different output shapes, but the underlying reasoning shares the same training data and RLHF patterns. Prism reveals the influence — it doesn't fully escape it.
+> Neti's perspectives come from the same kind of model that gave you the default answer. Structural constraints force different output shapes, but the underlying reasoning shares the same training data and RLHF patterns. Neti reveals the influence — it doesn't fully escape it.
 
 ---
 
@@ -445,12 +450,12 @@ Honest answer: **partially.**
 ### Config hierarchy
 
 ```
-.prism.json (project)  →  ~/.config/prism/config.json (global)  →  auto-detect
+.neti.json (project)  →  ~/.config/neti/config.json (global)  →  auto-detect
 ```
 
 Project config overrides global. Both override auto-detection.
 
-### Global: `~/.config/prism/config.json`
+### Global: `~/.config/neti/config.json`
 
 ```json
 {
@@ -460,7 +465,7 @@ Project config overrides global. Both override auto-detection.
 }
 ```
 
-### Project: `.prism.json`
+### Project: `.neti.json`
 
 ```json
 {
@@ -473,20 +478,20 @@ Project config overrides global. Both override auto-detection.
 ### Providers
 
 ```bash
-prism config provider ollama          # Local
-prism config provider openai          # OpenAI
-prism config provider anthropic       # Claude
-prism config provider gemini          # Gemini
-prism config provider openrouter      # OpenRouter
-prism config provider custom          # Any OpenAI-compatible
-prism config endpoint http://host:1234/v1
+neti config provider ollama          # Local
+neti config provider openai          # OpenAI
+neti config provider anthropic       # Claude
+neti config provider gemini          # Gemini
+neti config provider openrouter      # OpenRouter
+neti config provider custom          # Any OpenAI-compatible
+neti config endpoint http://host:1234/v1
 ```
 
 ### Strategy selection
 
 ```bash
-prism config strategies auto       # system learns what works for you
-prism config strategies "pre_mortem,falsification,blind_spot,inversion"
+neti config strategies auto       # system learns what works for you
+neti config strategies "pre_mortem,falsification,blind_spot,inversion"
 ```
 
 Available: `devils_advocate`, `blind_spot`, `first_principles`, `inversion`, `systems`, `stakeholder`, `pre_mortem`, `alternative_hypothesis`, `falsification`, `adjacent_field`
@@ -495,7 +500,7 @@ Available: `devils_advocate`, `blind_spot`, `first_principles`, `inversion`, `sy
 
 ---
 
-## Using Prism Well
+## Using Neti Well
 
 1. **Use it before you've committed** to an approach — cognitive flexibility is highest early
 2. **State your position honestly** — self-explanation works best with honest attempts, not performance ([Chi et al. 1989](https://onlinelibrary.wiley.com/doi/10.1207/s15516709cog1302_1))
@@ -528,12 +533,12 @@ Available: `devils_advocate`, `blind_spot`, `first_principles`, `inversion`, `sy
 
 ### What the research says AGAINST this approach
 
-- **Self-tracking rarely changes behavior** — fitness tracker RCTs show negative results at 24 months (Jakicic 2016, JAMA, n=471). Prism's insights may not drive lasting change.
+- **Self-tracking rarely changes behavior** — fitness tracker RCTs show negative results at 24 months (Jakicic 2016, JAMA, n=471). Neti's insights may not drive lasting change.
 - **Single-model perspectives share priors** — structural constraints produce output-shape divergence, but the reasoning comes from one set of weights with one training distribution.
 - **Reading AI text is passive** — Chi's work argues for generation over reception. The before/after input is active; reading perspectives is passive consumption.
 - **AI ideas homogenize at scale** — individual outputs look novel, but collective output shows higher textual similarity across users (Doshi & Hauser 2024, Science Advances, n=293).
 - **Effect durability unknown** — most perspective-taking research measures immediately after the intervention. Whether thinking stays changed is underresearched.
-- **Awareness may not prevent spiraling** — Chandra et al. (2026) found that even users who suspected AI sycophancy still spiraled into false beliefs. Prism measures drift rather than just warning about it, but measurement alone may not break the feedback loop.
+- **Awareness may not prevent spiraling** — Chandra et al. (2026) found that even users who suspected AI sycophancy still spiraled into false beliefs. Neti measures drift rather than just warning about it, but measurement alone may not break the feedback loop.
 - **Perspective quality is LLM-limited** — for cutting-edge research, the model may not know enough to generate genuinely challenging alternatives.
 
 </details>
@@ -544,7 +549,7 @@ Available: `devils_advocate`, `blind_spot`, `first_principles`, `inversion`, `sy
 
 This is a side project, built and improved in free time. The code is minimal, the scope is deliberately narrow, and there are no plans to turn this into a product or service.
 
-But the findings are real. If you use Prism for a few sessions and look at your insights, you'll see patterns in how AI is shaping your thinking — your confidence changes, your tendency to adopt or resist AI framing, which types of challenges actually move you. That data is yours, and it stays on your machine.
+But the findings are real. If you use Neti for a few sessions and look at your insights, you'll see patterns in how AI is shaping your thinking — your confidence changes, your tendency to adopt or resist AI framing, which types of challenges actually move you. That data is yours, and it stays on your machine.
 
 Contributions, feedback, and research collaborations welcome.
 
@@ -558,7 +563,7 @@ But one thing was never examined: **what does the AI's default response do to th
 
 Not what the AI outputs. What happens to *you*.
 
-Prism makes that visible.
+Neti makes that visible.
 
 ---
 
