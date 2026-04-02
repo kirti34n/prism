@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "prism-think"
+name = "neti-think"
 dynamic = ["version"]
-description = "See how AI changes your thinking - before you realize it"
+description = "neti neti — find your thinking by negating what it isn't"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.7"
@@ -34,14 +34,14 @@ classifiers = [
 semantic = ["sentence-transformers"]
 
 [project.urls]
-Homepage = "https://github.com/kirti34n/prism"
-Repository = "https://github.com/kirti34n/prism"
+Homepage = "https://github.com/kirti34n/neti"
+Repository = "https://github.com/kirti34n/neti"
 
 [project.scripts]
-prism = "prism:_main"
+neti = "neti:_main"
 
 [tool.setuptools]
-py-modules = ["prism"]
+py-modules = ["neti"]
 
 [tool.setuptools.dynamic]
-version = {attr = "prism.__version__"}
+version = {attr = "neti.__version__"}
