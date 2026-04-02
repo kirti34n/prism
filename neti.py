@@ -231,11 +231,19 @@ def _measure_independence(after: str | None, responses: dict[str, str]) -> float
 
 
 def _classify_session(conf_before: int | None, conf_after: int | None, shift: float | None,
-                      direction: str, after_text: str | None, question: str) -> str:
+                      direction: str, after_text: str | None, question: str,
+                      before_text: str | None = None) -> str:
     """Classify session based on confidence + text + direction signals."""
-    # Reframing: user asked a different question
-    is_reframing = (after_text and '?' in after_text
-                    and _distance(question, after_text) > REFRAMING_DISTANCE)
+    # Reframing: user changed the question or frame
+    if _load_embedder() and before_text:
+        # Semantic: detect reframing without requiring '?' — catches "I think the real issue is X"
+        is_reframing = (after_text
+                        and _distance(question, after_text) > REFRAMING_DISTANCE
+                        and _distance(before_text, after_text) > REFRAMING_DISTANCE)
+    else:
+        # Lexical fallback (or no before_text): keep '?' heuristic
+        is_reframing = (after_text and '?' in after_text
+                        and _distance(question, after_text) > REFRAMING_DISTANCE)
     if is_reframing:
         return 'reframing'
 
@@ -779,7 +787,7 @@ def explore(question):
     independence = _measure_independence(human_after, responses)
     convergence = _distance(human_after, responses['default']) if human_after else None
     session_type = _classify_session(conf_before, conf_after, shift, direction,
-                                      human_after, question)
+                                      human_after, question, before_text=human_before)
 
     if (human_before and len(human_before) > INPUT_TRUNCATION_LIMIT) or (human_after and len(human_after) > INPUT_TRUNCATION_LIMIT):
         print("  (Note: response truncated to 500 characters for storage)")
