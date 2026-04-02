@@ -1298,8 +1298,177 @@ def _setup_install(prism_path):
         print(f"  Then: source ~/.bashrc")
 
 
+# ---- Embedded Claude Code skill content (no external files needed) ----
+
+_SKILL_PRISM = """\
+---
+name: prism
+description: Generate divergent perspectives on a question using research-backed cognitive strategies. Reveals how AI shapes your thinking.
+argument-hint: <question or topic>
+---
+
+# Prism — Divergent Perspectives
+
+Generate structurally different perspectives using 10 research-backed cognitive strategies.
+
+## When to use
+
+- User asks for perspectives, different angles, challenges thinking, says "prism"
+- User is making a decision or evaluating approaches
+- User wants to stress-test a technical approach
+
+## How to run
+
+**Path 1 — CLI available:** Run `prism json "$ARGUMENTS"`, parse the JSON output. It includes divergence scores and tracking. Present using the format in Step 4.
+
+**Path 2 — No CLI:** Generate natively using the steps below.
+
+### Step 1: Default Answer
+
+Give the most practical, specific answer to the question. 3-4 sentences. Name specific technologies, approaches, or steps — not vague principles.
+
+### Step 2: Generate 3 Perspectives
+
+Pick 3 strategies from the table below. Each MUST follow its structural constraint exactly. Do NOT hedge or qualify — commit fully to the perspective.
+
+| Strategy | Constraint |
+|----------|-----------|
+| Devil's Advocate | Argue AGAINST the common position. No hedging. Real failure examples. |
+| Pre-Mortem | 18 months from now, this failed. Write the post-mortem. Specific failure modes. |
+| Falsification | Design the exact test that would disprove this. Metric, threshold, timeframe. |
+| Blind Spot | ONE hidden assumption that changes the entire framing. The mechanism that hides it. |
+| Alt Hypothesis | 3 structurally different explanations. Core insight, scenario where it wins, distinguishing test. |
+| First Principles | List 2-3 "everyone knows" assumptions. Show where each breaks. Rebuild without them. |
+| Inversion | Answer the exact opposite question in detail. What does the inversion reveal? |
+| Systems | Only 2nd/3rd order effects. Follow causal chains 3 steps. Name feedback loops. |
+| Stakeholder | Who gets harmed? Tell the story from their perspective. Make the friction concrete. |
+| Adjacent Field | Pick a specific field that solved an analogous problem. Map their technique onto this. |
+
+### Step 3: Rank by Divergence
+
+Order perspectives by how different each is from the default. Most divergent first.
+
+### Step 4: Present
+
+**Default Answer**
+[the default — 3-4 sentences]
+
+---
+
+**Divergent Perspectives**
+
+**1. [Strategy Name]**
+[Full perspective text — 4-8 sentences minimum]
+
+**2. [Strategy Name]**
+[Full perspective text]
+
+**3. [Strategy Name]**
+[Full perspective text]
+
+---
+
+*Do any of these shift how you're thinking about this?*
+
+## Important
+
+Do NOT paraphrase, shorten, or editorialize perspectives. The value is in the specifics, examples, and concrete details. Each perspective should commit fully to its position — no "on the other hand" hedging. If a perspective names specific technologies, failure modes, or examples, keep them all.
+"""
+
+_SKILL_CHECK = """\
+---
+name: prism-check
+description: Challenge a conclusion before committing to it. Generates Pre-Mortem, Alt Hypothesis, Falsification, and Blind Spot challenges.
+argument-hint: <conclusion to challenge>
+---
+
+# Prism Check — Challenge a Conclusion
+
+Stress-test a conclusion using 4 research-backed strategies before committing to it.
+
+## When to use
+
+- User wants to challenge or stress-test a conclusion
+- User says "check this", "challenge this", "is this right", "prism check"
+- User is about to commit to a technical decision based on AI advice
+- User has a claim or assumption they want tested
+
+## How to run
+
+**Path 1 — CLI available:** Run `prism json --check "$ARGUMENTS"`, parse JSON, present results.
+
+**Path 2 — No CLI:** Generate all 4 challenges below natively.
+
+### Generate 4 Challenges
+
+Apply ALL of these to the conclusion:
+
+**Pre-Mortem** — It is 18 months from now. This approach was pursued and FAILED. The failure was predictable in hindsight. Write the post-mortem: the specific failure mode, the early warning signs that were rationalized away, the moment the team should have pivoted. Be brutally concrete.
+
+**Alt Hypothesis** — Name 3 genuinely different explanations or approaches. Not variations on a theme — structurally different mechanisms. For each: (a) the core insight that makes it work, (b) one scenario where it outperforms the conclusion, (c) the test that distinguishes them.
+
+**Falsification** — Design the exact test that would DISPROVE this. Name the specific metric, threshold, and scenario. If no test can disprove it, explain why that's a red flag.
+
+**Blind Spot** — Identify exactly ONE hidden assumption that changes the entire framing. Not a minor detail — a structural blind spot that, once seen, makes the conclusion look naive. Explain the mechanism that keeps people from seeing it.
+
+### Present
+
+For each challenge:
+1. **Strategy name** in bold
+2. The full challenge (4-8 sentences minimum — commit fully, no hedging)
+
+End with: *"Does the original conclusion still hold?"*
+
+## Important
+
+Do NOT soften or balance challenges. The entire point is to stress-test. Each challenge should make the user uncomfortable with the conclusion — that's the signal it's working.
+"""
+
+_SKILL_AUTO = """\
+---
+name: prism-auto
+description: Automatically add diverse perspectives when user is making decisions, evaluating approaches, or asking should-I questions
+user-invocable: false
+---
+
+# Prism Auto — Lightweight Perspective Nudges
+
+When you detect the user is making a decision or evaluating approaches, add 2 brief divergent perspectives inline.
+
+## When to trigger
+
+- "should we/I...", "which approach...", "is it better to..."
+- Evaluating trade-offs between options
+- About to commit to an architecture or approach
+
+Do NOT trigger on simple factual questions, implementation requests, or when the user is asking for help with something already decided.
+
+## How to generate
+
+Pick 2 strategies from: Devil's Advocate, Pre-Mortem, Blind Spot, First Principles, Inversion, Systems.
+
+For each, write 2-3 sentences that commit fully to that perspective. No hedging.
+
+## How to present
+
+After your normal response, add:
+
+---
+
+**Prism perspectives:**
+- **[Strategy]:** [2-3 sentence perspective]
+- **[Strategy]:** [2-3 sentence perspective]
+
+*Run /prism for the full experience with more perspectives.*
+
+---
+
+Keep it lightweight. This is a nudge, not the full Prism flow.
+"""
+
+
 def _setup_claude_code():
-    """Register Prism as a Claude Code marketplace plugin."""
+    """Generate and install Prism as a Claude Code plugin (works from any install method)."""
     claude_dir = Path.home() / '.claude'
     claude_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1315,42 +1484,45 @@ def _setup_claude_code():
     if 'extraKnownMarketplaces' not in settings:
         settings['extraKnownMarketplaces'] = {}
     settings['extraKnownMarketplaces']['prism-skill'] = {
-        'source': {
-            'source': 'github',
-            'repo': 'kirti34n/prism'
-        }
+        'source': {'source': 'github', 'repo': 'kirti34n/prism'}
     }
-
     if 'enabledPlugins' not in settings:
         settings['enabledPlugins'] = {}
     settings['enabledPlugins']['prism@prism-skill'] = True
-
     settings_path.write_text(json.dumps(settings, indent=2) + '\n')
 
-    # --- 2. Cache the plugin ---
-    prism_root = Path(os.path.realpath(__file__)).parent
+    # --- 2. Generate plugin files in cache ---
     cache_dir = claude_dir / 'plugins' / 'cache' / 'prism-skill' / 'prism' / __version__
-    cache_dir.mkdir(parents=True, exist_ok=True)
-
-    # Copy essential files to cache
-    import shutil
-    for item in ('.claude-plugin', '.claude'):
-        src = prism_root / item
-        dst = cache_dir / item
-        if src.exists():
-            if dst.exists():
-                shutil.rmtree(dst)
-            shutil.copytree(src, dst)
-    for f in ('prism.py', 'pyproject.toml', 'LICENSE', 'README.md', '.gitignore'):
-        src = prism_root / f
-        if src.exists():
-            shutil.copy2(src, cache_dir / f)
+    files = {
+        '.claude-plugin/plugin.json': json.dumps({
+            'name': 'prism', 'version': __version__,
+            'description': 'See how AI changes your thinking. Generate divergent '
+                           'perspectives or challenge conclusions before committing.',
+            'author': {'name': 'keerti'},
+            'skills': ['./.claude/skills/prism', './.claude/skills/prism-check',
+                       './.claude/skills/prism-auto'],
+        }, indent=2),
+        '.claude-plugin/marketplace.json': json.dumps({
+            'name': 'prism-skill', 'id': 'prism-skill',
+            'owner': {'name': 'keerti'},
+            'plugins': [{'name': 'prism', 'source': './', 'version': __version__,
+                         'description': 'Divergent perspectives and conclusion challenges '
+                                        'using research-backed cognitive strategies.',
+                         'category': 'thinking'}],
+        }, indent=2),
+        '.claude/skills/prism/SKILL.md': _SKILL_PRISM,
+        '.claude/skills/prism-check/SKILL.md': _SKILL_CHECK,
+        '.claude/skills/prism-auto/SKILL.md': _SKILL_AUTO,
+    }
+    for rel_path, content in files.items():
+        full = cache_dir / rel_path
+        full.parent.mkdir(parents=True, exist_ok=True)
+        full.write_text(content)
 
     # --- 3. Register in installed_plugins.json ---
     plugins_dir = claude_dir / 'plugins'
     plugins_dir.mkdir(parents=True, exist_ok=True)
     installed_path = plugins_dir / 'installed_plugins.json'
-
     installed = {'version': 2, 'plugins': {}}
     if installed_path.exists():
         try:
@@ -1358,29 +1530,11 @@ def _setup_claude_code():
         except (json.JSONDecodeError, OSError):
             pass
 
-    # Get git commit SHA if available
-    commit_sha = ''
-    try:
-        import subprocess
-        result = subprocess.run(
-            ['git', '-C', str(prism_root), 'rev-parse', 'HEAD'],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.returncode == 0:
-            commit_sha = result.stdout.strip()
-    except Exception:
-        pass
-
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000Z')
     installed.setdefault('plugins', {})['prism@prism-skill'] = [{
-        'scope': 'user',
-        'installPath': str(cache_dir),
-        'version': __version__,
-        'installedAt': now,
-        'lastUpdated': now,
-        'gitCommitSha': commit_sha,
+        'scope': 'user', 'installPath': str(cache_dir),
+        'version': __version__, 'installedAt': now, 'lastUpdated': now,
     }]
-
     installed_path.write_text(json.dumps(installed, indent=2) + '\n')
 
     # --- 4. Clean up old command files ---
@@ -1390,8 +1544,7 @@ def _setup_claude_code():
         if old_file.exists():
             old_file.unlink()
 
-    print(f"\n  Claude Code plugin installed (self-contained — works with or without CLI):")
-    print(f"    Cache: {cache_dir}")
+    print(f"\n  Claude Code plugin installed (works with or without CLI):")
     print(f"    /prism <question>          — divergent perspectives")
     print(f"    /prism-check <conclusion>  — challenge a conclusion")
     print(f"    prism-auto                 — auto-triggers on decision questions")

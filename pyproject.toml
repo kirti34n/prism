@@ -34,8 +34,8 @@ classifiers = [
 semantic = ["sentence-transformers"]
 
 [project.urls]
-Homepage = "https://github.com/keerti/prism"
-Repository = "https://github.com/keerti/prism"
+Homepage = "https://github.com/kirti34n/prism"
+Repository = "https://github.com/kirti34n/prism"
 
 [project.scripts]
 prism = "prism:_main"

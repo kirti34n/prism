@@ -25,11 +25,12 @@ It forces you to state your position and confidence *before* seeing any AI outpu
 
 You type a research question. An AI gives you an elaborate, well-structured answer. Maybe multiple agents debated it. Maybe it searched the web and cited papers. You think: "that was thorough." But:
 
-- The AI agreed with your framing [49% more than a human would](https://news.stanford.edu/stories/2026/03/ai-advice-sycophantic-models-research) (Science, 2026)
-- You rated its answer as more trustworthy *because* it agreed with you
-- AI-generated ideas [look novel individually but converge at population level](https://arxiv.org/abs/2409.04109) — only 5% unique from 4,000 generated
-- After using AI, people produce [narrower ideas and think less critically](https://www.microsoft.com/en-us/research/blog/the-future-of-ai-in-knowledge-work-tools-for-thought-at-chi-2025/) (Microsoft CHI 2025)
-- Students with AI access performed better during practice but [worse on independent tests](https://arxiv.org/abs/2404.10730) — a dependency effect (Bastani et al. 2024, n=1000+)
+- AI chatbots [affirmed users' positions 49% more often than humans did](https://news.stanford.edu/stories/2026/03/ai-advice-sycophantic-models-research) (Cheng & Jurafsky, Science, 2026)
+- Even mathematically ideal reasoners [spiral into false beliefs](https://arxiv.org/abs/2602.19141) through sycophantic AI feedback loops — the paper calls it "delusional spiraling" (Chandra et al., MIT CSAIL, 2026)
+- AI users showed [up to 55% reduced brain connectivity](https://arxiv.org/abs/2506.08872) during writing tasks, and 83% couldn't recall their own AI-assisted essays (Kos'myna et al., MIT Media Lab, 2025)
+- AI-generated ideas [look novel individually but converge at population level](https://arxiv.org/abs/2409.04109) — only ~5% unique from 4,000 generated per topic (Si et al. 2024)
+- After using AI, people [expend less cognitive effort on critical thinking for routine tasks](https://www.microsoft.com/en-us/research/blog/the-future-of-ai-in-knowledge-work-tools-for-thought-at-chi-2025/) (Microsoft CHI 2025)
+- Students with AI access performed better during practice but [17% worse on independent tests](https://www.pnas.org/doi/10.1073/pnas.2422633122) — a dependency effect (Bastani et al. 2025, PNAS, n≈1,000)
 
 The AI didn't make you think better. It made you think *its way*. And the longer the process looked, the more you trusted the result.
 
@@ -60,6 +61,8 @@ python3 prism.py "your question"   # local — just run from this directory
 # Pick one:
 export OPENAI_API_KEY=sk-...        # OpenAI
 export ANTHROPIC_API_KEY=sk-...     # Claude
+export GOOGLE_API_KEY=...           # Gemini
+export OPENROUTER_API_KEY=...       # OpenRouter
 # OR just have Ollama running       # Local (auto-detected)
 ```
 
@@ -329,6 +332,7 @@ flowchart TD
     I -->|"Confidence dropped 3+"| K["DESTABILIZATION"]
     I -->|"Shifted independently"| L["RECONCEPTUALIZATION"]
     I -->|"Moved toward AI"| M["ADOPTION"]
+    I -->|"Some measurable change"| O["SHIFT"]
     I -->|"No change"| N["UNSHAKEN"]
 ```
 
@@ -359,6 +363,7 @@ Each session is classified by what happened to your thinking:
 | **Destabilization** | Confidence dropped significantly | Productive doubt — a held belief was shaken |
 | **Reconceptualization** | Position changed in an independent direction | Genuine new thinking — you went somewhere the AI didn't point |
 | **Adoption** | Moved toward a model response | Caution — you may have absorbed the AI's frame |
+| **Shift** | Some measurable change in text or confidence | Movement detected, but not clearly in one category above |
 | **Unshaken** | No change in position or confidence | The perspectives didn't land — or you were already well-calibrated |
 
 ### What's tracked
@@ -493,7 +498,7 @@ Available: `devils_advocate`, `blind_spot`, `first_principles`, `inversion`, `sy
 ## Using Prism Well
 
 1. **Use it before you've committed** to an approach — cognitive flexibility is highest early
-2. **State your position honestly** — self-explanation works best with honest attempts, not performance ([Chi 1989](https://onlinelibrary.wiley.com/doi/10.1207/s15516709cog1803_3))
+2. **State your position honestly** — self-explanation works best with honest attempts, not performance ([Chi et al. 1989](https://onlinelibrary.wiley.com/doi/10.1207/s15516709cog1302_1))
 3. **Watch your confidence** — if it always goes UP after perspectives, you're probably anchoring to the AI
 4. **Use `check` after AI research** — the longer the AI process, the more you need to challenge the conclusion
 5. **Reframing is the deepest signal** — if you find yourself asking a different question, the perspectives worked
@@ -508,24 +513,27 @@ Available: `devils_advocate`, `blind_spot`, `first_principles`, `inversion`, `sy
 
 | Design decision | Research | What it found |
 |---|---|---|
-| Think before seeing AI | Chi et al. 1989 (d > 0.8) | Self-explanation improves understanding; must generate, not receive |
+| Think before seeing AI | Chi et al. 1989; meta-analysis d ≈ 0.55 (Bisra et al. 2018) | Self-explanation improves understanding; must generate, not receive |
 | Structural constraints, not roles | Lord, Lepper & Preston 1984 | "Consider the opposite" works; "be fair and unbiased" does nothing |
-| Confidence tracking | Hasan et al. (CRI) | Answer + confidence together distinguishes misconception from ignorance from genuine understanding |
-| Frame-change detection | Vosniadou (conceptual change) | Genuine change generates new questions, not just new answers |
+| Confidence tracking | Hasan et al. 1999 (Certainty of Response Index) | Answer + confidence together distinguishes misconception from ignorance from genuine understanding |
+| Frame-change detection | Vosniadou (framework theory of conceptual change) | Genuine change requires restructuring frameworks, not just adding facts |
 | Pre-mortem strategy | Klein 2007, Veinott 2010 (n=178) | Prospective hindsight generates 30% more failure reasons, reduces overconfidence |
 | Alternative hypothesis | Hirt & Markman 1995 | Any plausible alternative triggers debiasing simulation mindset |
 | Falsification probe | Tetlock 2015 (Superforecasting) | Best forecasters are 60% more accurate; falsification is their key habit |
 | Adjacent field exposure | Uzzi 2013 (Science, 17.9M papers) | Atypical combinations produce 2x citation impact |
-| Divergence ranking | Anti-sycophancy (Stanford 2026) | Select for MAX divergence from default to counter agreement bias |
-| Friction by design | Bastani et al. 2024 (n=1000+) | AI access improved practice performance, worsened independent test performance |
+| Divergence ranking | Anti-sycophancy (Cheng & Jurafsky, Science 2026) | Select for MAX divergence from default to counter agreement bias |
+| Before/after measurement | Chandra et al. 2026 (MIT CSAIL, preprint) | Even ideal Bayesian reasoners spiral into false beliefs via sycophantic feedback; confidence tracking detects this |
+| Forced articulation | Kos'myna et al. 2025 (MIT Media Lab, preprint) | AI users show 55% reduced brain connectivity; pre-AI articulation counters passive consumption |
+| Friction by design | Bastani et al. 2025 (PNAS, n≈1,000) | AI access improved practice performance, worsened independent test performance |
 
 ### What the research says AGAINST this approach
 
 - **Self-tracking rarely changes behavior** — fitness tracker RCTs show negative results at 24 months (Jakicic 2016, JAMA, n=471). Prism's insights may not drive lasting change.
 - **Single-model perspectives share priors** — structural constraints produce output-shape divergence, but the reasoning comes from one set of weights with one training distribution.
 - **Reading AI text is passive** — Chi's work argues for generation over reception. The before/after input is active; reading perspectives is passive consumption.
-- **AI ideas homogenize at scale** — individual outputs look novel, but across users, everyone gets steered toward similar frames (Doshi & Hauser 2024, Science Advances, n=293).
+- **AI ideas homogenize at scale** — individual outputs look novel, but collective output shows higher textual similarity across users (Doshi & Hauser 2024, Science Advances, n=293).
 - **Effect durability unknown** — most perspective-taking research measures immediately after the intervention. Whether thinking stays changed is underresearched.
+- **Awareness may not prevent spiraling** — Chandra et al. (2026) found that even users who suspected AI sycophancy still spiraled into false beliefs. Prism measures drift rather than just warning about it, but measurement alone may not break the feedback loop.
 - **Perspective quality is LLM-limited** — for cutting-edge research, the model may not know enough to generate genuinely challenging alternatives.
 
 </details>
