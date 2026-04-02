@@ -906,6 +906,21 @@ def check(conclusion):
             _print_wrapped(results[key], indent=4)
 
     print(f"\n  Does the conclusion still hold?\n")
+
+    # Log check session to state
+    state = _load_state()
+    session = {
+        'id': hashlib.sha256(str(time.time()).encode()).hexdigest()[:8],
+        'timestamp': datetime.now().isoformat(),
+        'question': conclusion[:INPUT_TRUNCATION_LIMIT],
+        'session_type': 'check',
+        'strategies_shown': [k for k in CHECK_STRATEGIES if k in results and results[k]],
+        'human_before': None, 'human_after': None,
+        'confidence_before': None, 'confidence_after': None,
+        'shift': None, 'direction': None, 'independence': None,
+    }
+    state.setdefault('sessions', []).append(session)
+    _save_state(state)
     _log(f"check: '{conclusion[:50]}'")
 
 
