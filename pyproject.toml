@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "prism-think"
 dynamic = ["version"]
-description = "A decision journal for the AI era — record your thinking before and after consulting an AI, and get evidence-based counterarguments."
+description = "A decision journal for the AI era - record your thinking before and after consulting an AI, and get evidence-based counterarguments."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.7"

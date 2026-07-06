@@ -18,5 +18,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Run tests (stdlib only — no install needed)
+      - name: Run tests (stdlib only - no install needed)
         run: python -m unittest test_prism -v

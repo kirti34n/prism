@@ -4,7 +4,7 @@ description: Generate divergent, evidence-grounded perspectives on a question us
 argument-hint: <question or topic>
 ---
 
-# Prism — Divergent Perspectives
+# Prism - Divergent Perspectives
 
 Generate structurally different perspectives that refute the obvious answer, using research-backed cognitive strategies.
 
@@ -16,17 +16,17 @@ Generate structurally different perspectives that refute the obvious answer, usi
 
 ## How to run
 
-**Path 1 — CLI available:** Run `prism json "$ARGUMENTS"`, parse the JSON output (it includes divergence scores). Present using the format in Step 4.
+**Path 1 - CLI available:** Run `prism json "$ARGUMENTS"`, parse the JSON output (it includes divergence scores). Present using the format in Step 4.
 
-**Path 2 — No CLI:** Generate natively using the steps below.
+**Path 2 - No CLI:** Generate natively using the steps below.
 
 ### Step 1: Default answer
 
-Give the most practical, specific answer to the question — 3-4 sentences, concrete technologies/approaches, not vague principles. This is the answer the perspectives will push against.
+Give the most practical, specific answer to the question - 3-4 sentences, concrete technologies/approaches, not vague principles. This is the answer the perspectives will push against.
 
 ### Step 2: Generate 3 perspectives
 
-Pick 3 strategies from the table. Each one must **identify a key claim in the default answer and refute it specifically**. Ground each perspective in real, verifiable examples — if you are not sure an example is real, say so rather than inventing one. State each point at the confidence the evidence supports; calibrated is more persuasive than table-pounding.
+Pick 3 strategies from the table. Each one must **identify a key claim in the default answer and refute it specifically**. Ground each perspective in real, verifiable examples - if you are not sure an example is real, say so rather than inventing one. State each point at the confidence the evidence supports; calibrated is more persuasive than table-pounding.
 
 | Strategy | Constraint |
 |----------|-----------|
@@ -54,11 +54,11 @@ Order perspectives by how different each is from the default. Most divergent fir
 
 **Divergent Perspectives**
 
-**1. [Strategy Name]** — [full perspective, 4-8 sentences, refuting the default]
+**1. [Strategy Name]** - [full perspective, 4-8 sentences, refuting the default]
 
-**2. [Strategy Name]** — [full perspective]
+**2. [Strategy Name]** - [full perspective]
 
-**3. [Strategy Name]** — [full perspective]
+**3. [Strategy Name]** - [full perspective]
 
 ---
 
@@ -66,4 +66,4 @@ Order perspectives by how different each is from the default. Most divergent fir
 
 ## Important
 
-Do NOT paraphrase or compress perspectives — the value is in the specifics, examples, and concrete mechanisms. Keep each perspective evidence-grounded and calibrated (real examples, honest confidence), and make sure each one actually refutes the default answer rather than drifting into a neutral survey.
+Do NOT paraphrase or compress perspectives - the value is in the specifics, examples, and concrete mechanisms. Keep each perspective evidence-grounded and calibrated (real examples, honest confidence), and make sure each one actually refutes the default answer rather than drifting into a neutral survey.

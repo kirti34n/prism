@@ -4,7 +4,7 @@ description: Automatically add brief divergent perspectives when the user is mak
 user-invocable: false
 ---
 
-# Prism Auto — Lightweight Perspective Nudges
+# Prism Auto - Lightweight Perspective Nudges
 
 When you detect the user is making a decision or evaluating approaches, add 2 brief divergent perspectives inline after your normal response.
 

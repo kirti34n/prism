@@ -1,7 +1,8 @@
-"""Tests for prism.py — pure functions plus mocked-LLM flow tests. No real network,
+"""Tests for prism.py - pure functions plus mocked-LLM flow tests. No real network,
 no real file I/O (state functions are patched or pure helpers are called directly)."""
 
 import io
+import json
 import contextlib
 import tempfile
 import unittest
@@ -200,7 +201,7 @@ class TestReadConviction(unittest.TestCase):
         self.assertIsNone(self._conv(''))
 
     def test_unicode_digit_like(self):
-        # str.isdigit() is True for these but int() would raise — must not crash
+        # str.isdigit() is True for these but int() would raise - must not crash
         self.assertIsNone(self._conv('²'))
         self.assertIsNone(self._conv('¹²'))
 
@@ -271,7 +272,7 @@ class TestNonTTYExplore(unittest.TestCase):
     def test_logs_unmeasured_session_no_prompts(self):
         saved = []
         tmp = Path(tempfile.mkdtemp())
-        # Point the real _log at a temp dir instead of stubbing it — explore's final
+        # Point the real _log at a temp dir instead of stubbing it - explore's final
         # log line contains a literal '→', which must not crash the run (cp1252 regression).
         patches = {
             '_llm_call': lambda s, u, c: 'response ' + s[:8],
@@ -299,6 +300,25 @@ class TestNonTTYExplore(unittest.TestCase):
         self.assertIsNone(sess['position_before'])
         self.assertIsNone(sess['conviction_before'])
         self.assertNotIn('  > ', out.getvalue())  # no interactive prompt lines
+
+
+class TestBuildOllama(unittest.TestCase):
+    def _body(self, model):
+        _, body, _, _ = prism._build_ollama('sys', 'usr', model, 0.7, 200, {})
+        return json.loads(body)
+
+    def test_thinking_model_disables_think(self):
+        # qwen3+ would otherwise burn the budget inside <think> and truncate the answer
+        b = self._body('qwen3.5:4b')
+        self.assertIs(b['think'], False)
+        self.assertEqual(b['options']['num_predict'], 200)
+
+    def test_non_thinking_model_omits_think(self):
+        b = self._body('llama3.1:8b')
+        self.assertNotIn('think', b)
+
+    def test_deepseek_r1_disables_think(self):
+        self.assertIs(self._body('deepseek-r1:7b')['think'], False)
 
 
 class TestLog(unittest.TestCase):

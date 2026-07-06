@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Prism — a decision journal for the AI era.
+Prism - a decision journal for the AI era.
 
 Record what you thought before and after consulting an AI, get evidence-based
 counterarguments to the AI's default answer, and track your own trajectory.
@@ -12,7 +12,7 @@ Research-backed structural constraints. Zero dependencies.
   prism quick "question"        # just show perspectives, no measurement
   prism think                   # random prompt → explore
   prism insights                # your thinking patterns over time
-  prism revisit                 # look back at a past session — were you right?
+  prism revisit                 # look back at a past session - were you right?
   prism history                 # recent sessions
   prism config [key] [val]      # show or set configuration
   prism setup install           # how to install the 'prism' command
@@ -41,7 +41,7 @@ __version__ = '3.0.0'
 # ============================================================
 
 # Conviction is self-reported on a 0-100 scale. A drop this large flags
-# "destabilization" — ~2x the noise band of a 0-100 self-report, and larger
+# "destabilization" - ~2x the noise band of a 0-100 self-report, and larger
 # than typical persuasion-RCT effects (5-15 pts), so it catches genuine doubt.
 DESTABILIZATION_DROP = 20
 INPUT_TRUNCATION_LIMIT = 500
@@ -146,7 +146,7 @@ def _tokenize(text: str) -> list[str]:
 
 def _bow_distance(a: str, b: str) -> float:
     """Bag-of-words cosine distance. USED ONLY to order perspectives for display.
-    Makes no claim about opinion change — see _classify_session for that."""
+    Makes no claim about opinion change - see _classify_session for that."""
     va, vb = Counter(_tokenize(a)), Counter(_tokenize(b))
     inter = set(va) & set(vb)
     if not inter:
@@ -201,18 +201,25 @@ def _verbose(msg):
         print(f"  [verbose] {msg}", flush=True)
 
 
+_THINKING_MODELS = ('qwen3', 'deepseek-r1', 'qwq', 'magistral')
+
+
 def _build_ollama(system_prompt, user_prompt, model, temp, max_tokens, config):
     url = config.get('endpoint', 'http://localhost:11434') + '/api/chat'
-    predict = max(max_tokens * 3, 1500) if 'qwen' in model.lower() else max_tokens
-    body = json.dumps({
+    body = {
         'model': model,
         'messages': [{'role': 'system', 'content': system_prompt},
                      {'role': 'user', 'content': user_prompt}],
         'stream': False,
-        'options': {'temperature': temp, 'num_predict': predict}
-    }).encode()
+        'options': {'temperature': temp, 'num_predict': max_tokens},
+    }
+    # Thinking models otherwise spend the whole token budget reasoning inside
+    # <think> and get cut off before the answer, leaving nothing after we strip
+    # the block. Disabling thinking sends the full budget to the answer we use.
+    if any(k in model.lower() for k in _THINKING_MODELS):
+        body['think'] = False
     headers = {'Content-Type': 'application/json'}
-    return url, body, headers, OLLAMA_TIMEOUT
+    return url, json.dumps(body).encode(), headers, OLLAMA_TIMEOUT
 
 
 def _parse_ollama(raw):
@@ -324,7 +331,7 @@ def _llm_call(system_prompt: str, user_prompt: str, config: dict) -> str:
 
 
 # ============================================================
-# STRATEGIES — research-backed structural constraints
+# STRATEGIES - research-backed structural constraints
 # ============================================================
 
 _ACCURACY_GUARD = ('Only cite real, verifiable examples; if unsure whether an example '
@@ -334,31 +341,31 @@ _CALIBRATE = 'State this at the confidence the evidence supports.'
 STRATEGIES = {
     'default': {
         'name': 'Default',
-        'system': 'Answer the question directly. Give the most practical, well-reasoned answer you can. Include specific technologies, approaches, or steps — not vague principles. If there are trade-offs, name them concretely. ' + _ACCURACY_GUARD,
+        'system': 'Answer the question directly. Give the most practical, well-reasoned answer you can. Include specific technologies, approaches, or steps - not vague principles. If there are trade-offs, name them concretely. ' + _ACCURACY_GUARD,
     },
     # === Evidence-backed general strategies ===
     'devils_advocate': {
         'name': "Devil's Advocate",
-        'system': 'Argue against the answer you are shown. Identify its single strongest claim and refute it directly — explain the mechanism by which it fails, not just that it can fail. ' + _ACCURACY_GUARD + ' State objections at the confidence the evidence earns: label strong objections as strong and speculative ones as speculative. End by naming the one condition under which the conventional answer would still hold.',
+        'system': 'Argue against the answer you are shown. Identify its single strongest claim and refute it directly - explain the mechanism by which it fails, not just that it can fail. ' + _ACCURACY_GUARD + ' State objections at the confidence the evidence earns: label strong objections as strong and speculative ones as speculative. End by naming the one condition under which the conventional answer would still hold.',
         'prefix': 'The common answer is probably obvious. Argue against it:\n\n',
-        'evidence': 'Lord, Lepper & Preston 1984 — "consider the opposite" eliminates anchoring',
+        'evidence': 'Lord, Lepper & Preston 1984 - "consider the opposite" eliminates anchoring',
     },
     'blind_spot': {
         'name': 'Blind Spot',
-        'system': 'Identify exactly ONE hidden assumption or overlooked constraint that changes the entire framing — a structural blind spot that, once seen, makes the answer you were shown look naive. Show specifically how that answer depends on the assumption, and explain the mechanism that keeps people from seeing it. Give a concrete example of what goes wrong when it is missed. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
+        'system': 'Identify exactly ONE hidden assumption or overlooked constraint that changes the entire framing - a structural blind spot that, once seen, makes the answer you were shown look naive. Show specifically how that answer depends on the assumption, and explain the mechanism that keeps people from seeing it. Give a concrete example of what goes wrong when it is missed. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'What is the one thing most people miss:\n\n',
     },
     'first_principles': {
         'name': 'First Principles',
         'system': 'Strip away every inherited assumption behind the answer you were shown. Name the 2-3 things "everyone knows" that might be wrong. For each, describe the specific scenario where it breaks down, cite a real precedent if you have one, and show what answer you get when you rebuild without that assumption. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'Break this down to first principles:\n\n',
-        'evidence': 'Koriat 1980 — counterargument generation calibrates confidence',
+        'evidence': 'Koriat 1980 - counterargument generation calibrates confidence',
     },
     'inversion': {
         'name': 'Inversion',
-        'system': 'Answer the exact OPPOSITE question. If they ask how to succeed, write a detailed recipe for guaranteed failure — specific steps, specific mistakes, specific bad decisions. Then state explicitly what the answer you were shown was hiding that the inversion reveals. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
+        'system': 'Answer the exact OPPOSITE question. If they ask how to succeed, write a detailed recipe for guaranteed failure - specific steps, specific mistakes, specific bad decisions. Then state explicitly what the answer you were shown was hiding that the inversion reveals. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'Answer the opposite:\n\n',
-        'evidence': 'Mussweiler 2000 — considering the opposite eliminates anchoring in expert judgment',
+        'evidence': 'Mussweiler 2000 - considering the opposite eliminates anchoring in expert judgment',
     },
     'systems': {
         'name': 'Systems',
@@ -367,34 +374,34 @@ STRATEGIES = {
     },
     'stakeholder': {
         'name': 'Stakeholder',
-        'system': 'Identify who gets harmed, marginalized, or locked out by the answer you were shown. Tell the story from their perspective — their constraints, their frustrations, their alternatives — and name specific scenarios that make the friction concrete for someone who is not the assumed user. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
+        'system': 'Identify who gets harmed, marginalized, or locked out by the answer you were shown. Tell the story from their perspective - their constraints, their frustrations, their alternatives - and name specific scenarios that make the friction concrete for someone who is not the assumed user. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'Who loses when we answer this the standard way:\n\n',
-        'evidence': 'Galinsky & Moskowitz 2000 — perspective-taking reduces bias',
+        'evidence': 'Galinsky & Moskowitz 2000 - perspective-taking reduces bias',
     },
     # === Research-specific strategies (evidence-backed) ===
     'pre_mortem': {
         'name': 'Pre-Mortem',
-        'system': 'It is 18 months from now. The answer you were shown was followed and it FAILED. Write the post-mortem: name the specific failure mode, the early warning signs that were rationalized away, and the moment the team should have pivoted but did not. Be concrete — "the API rate limits hit at 10K users and there was no fallback," not "scalability was an issue." ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
+        'system': 'It is 18 months from now. The answer you were shown was followed and it FAILED. Write the post-mortem: name the specific failure mode, the early warning signs that were rationalized away, and the moment the team should have pivoted but did not. Be concrete - "the API rate limits hit at 10K users and there was no fallback," not "scalability was an issue." ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'Assume this has already failed:\n\n',
-        'evidence': 'Klein 2007 — prospective hindsight generates 30% more failure reasons, reduces overconfidence',
+        'evidence': 'Klein 2007 - prospective hindsight generates 30% more failure reasons, reduces overconfidence',
     },
     'alternative_hypothesis': {
         'name': 'Alt Hypothesis',
-        'system': 'Name 3 genuinely different explanations or approaches for the same problem — structurally different mechanisms, not variations on the answer you were shown. For each, state (a) the core insight that makes it work, (b) one specific scenario where it outperforms that answer, and (c) the exact test or metric that would distinguish between them. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
+        'system': 'Name 3 genuinely different explanations or approaches for the same problem - structurally different mechanisms, not variations on the answer you were shown. For each, state (a) the core insight that makes it work, (b) one specific scenario where it outperforms that answer, and (c) the exact test or metric that would distinguish between them. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'What else could explain this:\n\n',
-        'evidence': 'Hirt & Markman 1995 — any alternative triggers debiasing simulation mindset',
+        'evidence': 'Hirt & Markman 1995 - any alternative triggers debiasing simulation mindset',
     },
     'falsification': {
         'name': 'Falsification',
-        'system': 'Design the exact test that would DISPROVE the answer you were shown. Name the specific metric, threshold, and scenario: "If X does not achieve Y under condition Z within timeframe W, this approach is wrong." If no test can disprove it, that is itself a red flag — explain why unfalsifiable plans are dangerous and what would make this one testable. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
+        'system': 'Design the exact test that would DISPROVE the answer you were shown. Name the specific metric, threshold, and scenario: "If X does not achieve Y under condition Z within timeframe W, this approach is wrong." If no test can disprove it, that is itself a red flag - explain why unfalsifiable plans are dangerous and what would make this one testable. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'What would disprove this:\n\n',
-        'evidence': 'Tetlock 2015 — superforecasters are 60% more accurate; falsification thinking is their key habit',
+        'evidence': 'Tetlock 2015 - superforecasters are 60% more accurate; falsification thinking is their key habit',
     },
     'adjacent_field': {
         'name': 'Adjacent Field',
-        'system': 'Pick a specific field that has already solved an analogous problem. Name the field, the specific technique or framework, and how it maps onto this problem in concrete terms, using their vocabulary. Describe what a practitioner from that field would do differently in the first week — at least one specific, actionable idea the answer you were shown would never generate. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
+        'system': 'Pick a specific field that has already solved an analogous problem. Name the field, the specific technique or framework, and how it maps onto this problem in concrete terms, using their vocabulary. Describe what a practitioner from that field would do differently in the first week - at least one specific, actionable idea the answer you were shown would never generate. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'How would a different field see this:\n\n',
-        'evidence': 'Uzzi 2013 (Science, 17.9M papers) — atypical combinations produce 2x citation impact',
+        'evidence': 'Uzzi 2013 (Science, 17.9M papers) - atypical combinations produce 2x citation impact',
     },
 }
 
@@ -467,7 +474,7 @@ def _new_state():
 
 def _migrate_v2(data):
     """v2 → v3: keep every old session (tagged legacy so readers can skip it in
-    metrics), drop the bandit weights. Pure and idempotent — no save inside."""
+    metrics), drop the bandit weights. Pure and idempotent - no save inside."""
     for s in data.get('sessions', []):
         s.setdefault('schema', 'v2-legacy')
     data.pop('strategy_weights', None)
@@ -500,7 +507,7 @@ def _load_state():
             if data.get('version') == VERSION:
                 return data
             # Any older/unrecognized-but-parseable version that still holds sessions
-            # is migrated, not discarded — never silently drop a user's history.
+            # is migrated, not discarded - never silently drop a user's history.
             if data.get('sessions') is not None:
                 data = _migrate_v2(data)
                 _save_state(data)
@@ -704,9 +711,9 @@ def _build_session(question, pos_before, conv_before, pos_after, conv_after,
 def _print_measurement(session):
     st = session['session_type']
     desc = {
-        'reframing': 'You changed the question — frame shift',
-        'destabilization': 'Conviction dropped sharply — productive doubt',
-        'adoption': 'Moved toward a model answer — check if genuine',
+        'reframing': 'You changed the question - frame shift',
+        'destabilization': 'Conviction dropped sharply - productive doubt',
+        'adoption': 'Moved toward a model answer - check if genuine',
         'switch': 'You flipped your stance',
         'shift': 'You moved, same side',
         'unshaken': 'No significant change',
@@ -768,7 +775,7 @@ def check(conclusion):
     """Challenge an AI conclusion before committing."""
     cfg = _load_config()
 
-    print(f"\n  PRISM — Challenge")
+    print(f"\n  PRISM - Challenge")
     print(f"  {'=' * 56}")
     _print_wrapped(conclusion, indent=2)
     print(f"  {'=' * 56}\n")
@@ -820,7 +827,7 @@ def check(conclusion):
 
 def quick(question):
     cfg = _load_config()
-    print(f"\n  PRISM — Quick View\n  {question}\n")
+    print(f"\n  PRISM - Quick View\n  {question}\n")
     strategies = _select_strategies(cfg)
     print(f"  Generating ({cfg.get('provider')}/{cfg.get('model')})...", flush=True)
     responses = _generate_perspectives(question, strategies, cfg)
@@ -889,7 +896,7 @@ def _insight_adoption(sessions):
     rate = adopted / len(recent)
     print(f"\n  Recent adoption: {rate:.0%} of last {len(recent)} classified sessions")
     if rate > 0.5:
-        print("    Most recent changes moved toward AI positions — bring outside sources")
+        print("    Most recent changes moved toward AI positions - bring outside sources")
 
 
 def _insight_moved(sessions):
@@ -909,7 +916,7 @@ def _insight_revisits(sessions):
     c = Counter(outcomes)
     decided = c['right'] + c['wrong']
     rate = f", {c['right']/decided:.0%} right of decided" if decided else ""
-    print(f"\n  Revisits: {len(outcomes)} — {c['right']} right, {c['wrong']} wrong, "
+    print(f"\n  Revisits: {len(outcomes)} - {c['right']} right, {c['wrong']} wrong, "
           f"{c['unclear']} unclear{rate}")
 
 
@@ -919,7 +926,7 @@ def insights():
     v3 = [s for s in sessions if s.get('schema') == 'v3']
     explore3 = [s for s in v3 if s.get('session_type') != 'check']
     n_legacy = sum(1 for s in sessions if s.get('schema') == 'v2-legacy')
-    print(f"\n  PRISM — Insights\n  {'─' * 40}\n  Sessions: {len(sessions)}")
+    print(f"\n  PRISM - Insights\n  {'─' * 40}\n  Sessions: {len(sessions)}")
     if n_legacy:
         print(f"  ({n_legacy} legacy v2 sessions excluded from metrics)")
     if len(explore3) < 3:
@@ -936,7 +943,7 @@ def insights():
 def history(count=10):
     state = _load_state()
     sessions = state.get('sessions', [])
-    print(f"\n  PRISM — History ({len(sessions)} sessions)\n  {'─' * 56}")
+    print(f"\n  PRISM - History ({len(sessions)} sessions)\n  {'─' * 56}")
     if not sessions:
         print('  No sessions yet.\n')
         return
@@ -966,7 +973,7 @@ def revisit():
         return
     cb = s.get('conviction_before', s.get('confidence_before'))
     ca = s.get('conviction_after', s.get('confidence_after'))
-    print(f"\n  PRISM — Revisit\n  {'─' * 56}")
+    print(f"\n  PRISM - Revisit\n  {'─' * 56}")
     print(f"  {(s.get('timestamp') or '')[:10]} | {s['question']}")
     print(f"  Before: {s.get('position_before') or s.get('human_before') or '(none)'}  (conviction {cb})")
     print(f"  After:  {s.get('position_after') or s.get('human_after') or '(none)'}  (conviction {ca})")
@@ -994,7 +1001,7 @@ def config_cmd(args):
     project_cfg = _find_project_config()
     merged = _load_config()
     if not args:
-        print(f"\n  PRISM — Configuration\n  {'─' * 40}")
+        print(f"\n  PRISM - Configuration\n  {'─' * 40}")
         for k, v in merged.items():
             src = '(project)' if k in project_cfg else '(global)' if k in global_cfg else '(auto)'
             print(f"  {k:>20}: {v}  {src}")
@@ -1174,7 +1181,7 @@ def get_check(conclusion: str) -> dict:
 _MARKETPLACE_REPO = 'kirti34n/prism'
 
 _CLAUDE_STEPS = f"""
-  Claude Code — add Prism as a plugin (survives updates, no file injection):
+  Claude Code - add Prism as a plugin (survives updates, no file injection):
 
     /plugin marketplace add {_MARKETPLACE_REPO}
     /plugin install prism@prism
@@ -1193,7 +1200,7 @@ _SKILLS_STEPS = """
 
 def setup(platform):
     """Print the standards-based integration steps (Prism no longer injects
-    files into other tools — see README for why)."""
+    files into other tools - see README for why)."""
     if platform == 'install':
         _setup_install()
     elif platform in ('claude', 'claude-code'):
@@ -1208,7 +1215,7 @@ def setup(platform):
 
 
 def _setup_help():
-    print(f"\n  PRISM — Setup\n  {'─' * 40}")
+    print(f"\n  PRISM - Setup\n  {'─' * 40}")
     print("  prism setup install    # how to install the 'prism' command")
     print("  prism setup claude     # Claude Code plugin (/prism, /prism-check)")
     print("  prism setup all        # every AI-tool integration path\n")
