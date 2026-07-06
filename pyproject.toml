@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "prism-think"
 dynamic = ["version"]
-description = "See how AI changes your thinking - before you realize it"
+description = "A decision journal for the AI era — record your thinking before and after consulting an AI, and get evidence-based counterarguments."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.7"
@@ -29,9 +29,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Utilities",
 ]
-
-[project.optional-dependencies]
-semantic = ["sentence-transformers"]
 
 [project.urls]
 Homepage = "https://github.com/kirti34n/prism"

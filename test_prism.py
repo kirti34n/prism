@@ -1,9 +1,20 @@
-"""Tests for prism.py pure functions — no LLM calls, no file I/O."""
+"""Tests for prism.py — pure functions plus mocked-LLM flow tests. No real network,
+no real file I/O (state functions are patched or pure helpers are called directly)."""
 
-import math
+import io
+import contextlib
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 import prism
+
+
+def _tty(value):
+    fake = mock.MagicMock()
+    fake.isatty.return_value = value
+    return fake
 
 
 class TestTokenize(unittest.TestCase):
@@ -48,251 +59,169 @@ class TestBowDistance(unittest.TestCase):
         self.assertLessEqual(d, 1.0)
 
 
-class TestCosineDistanceEmb(unittest.TestCase):
-    def test_identical_vectors(self):
-        v = [1.0, 0.0, 0.0]
-        self.assertAlmostEqual(prism._cosine_distance_emb(v, v), 0.0)
+class TestClassifySessionV3(unittest.TestCase):
+    def c(self, cat, cb, ca, moved):
+        return prism._classify_session(cat, cb, ca, moved)
 
-    def test_orthogonal_vectors(self):
-        a = [1.0, 0.0, 0.0]
-        b = [0.0, 1.0, 0.0]
-        self.assertAlmostEqual(prism._cosine_distance_emb(a, b), 1.0)
+    def test_reframing_trumps_everything(self):
+        # different_question wins even over a sharp conviction drop
+        self.assertEqual(self.c('different_question', 90, 50, 'pre_mortem'), 'reframing')
 
-    def test_opposite_vectors(self):
-        a = [1.0, 0.0]
-        b = [-1.0, 0.0]
-        # cosine similarity = -1, distance = 1 - (-1) = 2, but clamped to max(0, ...)
-        d = prism._cosine_distance_emb(a, b)
-        self.assertGreaterEqual(d, 0.0)
+    def test_destabilization_at_threshold(self):
+        self.assertEqual(self.c('same', 80, 60, None), 'destabilization')  # -20 fires
 
-    def test_similar_vectors(self):
-        a = [1.0, 0.1, 0.0]
-        b = [1.0, 0.2, 0.0]
-        d = prism._cosine_distance_emb(a, b)
-        self.assertGreaterEqual(d, 0.0)
-        self.assertLess(d, 0.5)
+    def test_no_destabilization_below_threshold(self):
+        self.assertEqual(self.c('same', 80, 61, None), 'unshaken')  # -19 does not
 
+    def test_destabilization_without_category(self):
+        self.assertEqual(self.c(None, 90, 65, None), 'destabilization')
 
-class TestClassifySession(unittest.TestCase):
-    def test_reframing(self):
-        # after_text contains '?' and is far from question
-        result = prism._classify_session(
-            conf_before=8, conf_after=7, shift=0.4,
-            direction='independent',
-            after_text='What factors influence this outcome?',
-            question='Does X cause Y?'
-        )
-        self.assertEqual(result, 'reframing')
+    def test_destabilization_needs_both_convictions(self):
+        self.assertEqual(self.c('shifted', None, 40, None), 'shift')
 
-    def test_destabilization(self):
-        result = prism._classify_session(
-            conf_before=8, conf_after=4, shift=0.05,
-            direction='stable',
-            after_text='Maybe not so sure anymore',
-            question='Is X true?'
-        )
-        self.assertEqual(result, 'destabilization')
+    def test_adoption_needs_moved_and_movement(self):
+        self.assertEqual(self.c('shifted', 60, 55, 'blind_spot'), 'adoption')
 
-    def test_adoption(self):
-        result = prism._classify_session(
-            conf_before=5, conf_after=6, shift=0.2,
-            direction='toward_pre_mortem',
-            after_text='The pre-mortem view convinced me',
-            question='Should we do X?'
-        )
-        self.assertEqual(result, 'adoption')
+    def test_moved_by_with_same_is_not_adoption(self):
+        self.assertEqual(self.c('same', 60, 58, 'blind_spot'), 'unshaken')
 
-    def test_reconceptualization(self):
-        result = prism._classify_session(
-            conf_before=7, conf_after=6, shift=0.25,
-            direction='independent',
-            after_text='I think there is a third way entirely',
-            question='Should we do X or Y?'
-        )
-        self.assertEqual(result, 'reconceptualization')
+    def test_switch(self):
+        self.assertEqual(self.c('switched', 70, 65, None), 'switch')
 
     def test_shift(self):
-        result = prism._classify_session(
-            conf_before=7, conf_after=6, shift=0.12,
-            direction='stable',
-            after_text='Slightly different view now',
-            question='What about X?'
-        )
-        self.assertEqual(result, 'shift')
+        self.assertEqual(self.c('shifted', 70, 68, None), 'shift')
 
     def test_unshaken(self):
-        result = prism._classify_session(
-            conf_before=7, conf_after=7, shift=0.05,
-            direction='stable',
-            after_text='Same as before',
-            question='What about X?'
-        )
-        self.assertEqual(result, 'unshaken')
+        self.assertEqual(self.c('same', 70, 70, None), 'unshaken')
 
-    def test_destabilization_priority_over_adoption(self):
-        # Confidence drop of 3+ should classify as destabilization even if direction is toward_X
-        result = prism._classify_session(
-            conf_before=9, conf_after=5, shift=0.2,
-            direction='toward_blind_spot',
-            after_text='Changed my mind completely',
-            question='Is X true?'
-        )
-        self.assertEqual(result, 'destabilization')
+    def test_unmeasured_when_nothing(self):
+        self.assertEqual(self.c(None, None, None, None), 'unmeasured')
 
-    def test_none_confidence(self):
-        result = prism._classify_session(
-            conf_before=None, conf_after=None, shift=0.05,
-            direction='stable',
-            after_text='Same',
-            question='What?'
-        )
-        self.assertEqual(result, 'unshaken')
+    def test_destabilization_beats_adoption(self):
+        # both conditions hold: -25 drop AND moved_by+shifted. Precedence must be destabilization.
+        self.assertEqual(self.c('shifted', 80, 55, 'blind_spot'), 'destabilization')
 
 
-class TestUpdateWeights(unittest.TestCase):
-    def _make_state(self):
-        return {'strategy_weights': {k: 1.0 for k in prism.STRATEGY_KEYS}}
+class TestMigration(unittest.TestCase):
+    def test_migrate_preserves_and_tags(self):
+        data = {'version': 2,
+                'sessions': [{'id': 'a', 'question': 'q'}, {'id': 'b', 'schema': 'x'}],
+                'strategy_weights': {'pre_mortem': 2.0}}
+        out = prism._migrate_v2(data)
+        self.assertEqual(out['version'], 3)
+        self.assertNotIn('strategy_weights', out)
+        self.assertEqual(len(out['sessions']), 2)
+        self.assertEqual(out['sessions'][0]['schema'], 'v2-legacy')
+        self.assertEqual(out['sessions'][1]['schema'], 'x')  # existing schema untouched
 
-    def test_shown_strategies_get_boost(self):
-        state = self._make_state()
-        prism._update_weights(state, ['pre_mortem', 'blind_spot'], None, 'shift', 'stable')
-        self.assertGreater(state['strategy_weights']['pre_mortem'], 1.0)
-        self.assertGreater(state['strategy_weights']['blind_spot'], 1.0)
+    def test_idempotent(self):
+        data = {'version': 2, 'sessions': [{'id': 'a'}]}
+        prism._migrate_v2(data)
+        prism._migrate_v2(data)
+        self.assertEqual(data['sessions'][0]['schema'], 'v2-legacy')
+        self.assertEqual(data['version'], 3)
 
-    def test_rated_strategy_gets_larger_boost(self):
-        state = self._make_state()
-        prism._update_weights(state, ['pre_mortem', 'blind_spot'], 'pre_mortem', 'shift', 'stable')
-        self.assertGreater(
-            state['strategy_weights']['pre_mortem'],
-            state['strategy_weights']['blind_spot']
-        )
-
-    def test_deep_shift_boosts_shown(self):
-        state = self._make_state()
-        prism._update_weights(state, ['pre_mortem'], None, 'reframing', 'stable')
-        self.assertGreater(state['strategy_weights']['pre_mortem'], 1.05)
-
-    def test_unshaken_reduces_shown(self):
-        state = self._make_state()
-        prism._update_weights(state, ['pre_mortem'], None, 'unshaken', 'stable')
-        self.assertLess(state['strategy_weights']['pre_mortem'], 1.0)
-
-    def test_weights_bounded_after_many_iterations(self):
-        """Weights should not explode after many sessions of consistent rating."""
-        state = self._make_state()
-        for _ in range(100):
-            prism._update_weights(
-                state, ['pre_mortem', 'blind_spot'], 'pre_mortem',
-                'reframing', 'toward_pre_mortem'
-            )
-        # After fix: weights should be reasonable (not thousands)
-        for w in state['strategy_weights'].values():
-            self.assertGreater(w, 0.01)
-            # This will fail BEFORE the fix (weights explode to ~15000)
-            # After the fix with normalization, all weights should be reasonable
-            self.assertLess(w, 100.0)
+    def test_empty_sessions(self):
+        out = prism._migrate_v2({'version': 2})
+        self.assertEqual(out['version'], 3)
 
 
 class TestSelectStrategies(unittest.TestCase):
-    def test_explicit_config(self):
-        state = {'strategy_weights': {k: 1.0 for k in prism.STRATEGY_KEYS}}
-        config = {'strategies': ['pre_mortem', 'falsification'], 'num_perspectives': 4}
-        result = prism._select_strategies(state, config)
-        self.assertEqual(result, ['pre_mortem', 'falsification'])
+    def test_explicit_list_honored(self):
+        r = prism._select_strategies({'strategies': ['pre_mortem', 'falsification'],
+                                      'num_perspectives': 4})
+        self.assertEqual(r, ['pre_mortem', 'falsification'])
 
-    def test_auto_returns_correct_count(self):
-        state = {'strategy_weights': {k: 1.0 for k in prism.STRATEGY_KEYS}}
-        config = {'strategies': 'auto', 'num_perspectives': 4}
-        result = prism._select_strategies(state, config)
-        self.assertEqual(len(result), 4)
+    def test_invalid_filtered(self):
+        r = prism._select_strategies({'strategies': ['nonexistent', 'pre_mortem'],
+                                      'num_perspectives': 4})
+        self.assertEqual(r, ['pre_mortem'])
 
-    def test_auto_includes_top_weighted(self):
-        weights = {k: 1.0 for k in prism.STRATEGY_KEYS}
-        weights['pre_mortem'] = 5.0
-        weights['blind_spot'] = 4.0
-        state = {'strategy_weights': weights}
-        config = {'strategies': 'auto', 'num_perspectives': 4}
-        result = prism._select_strategies(state, config)
-        self.assertIn('pre_mortem', result[:2])
-        self.assertIn('blind_spot', result[:2])
+    def test_invalid_only_falls_to_random(self):
+        r = prism._select_strategies({'strategies': ['nonexistent'], 'num_perspectives': 4})
+        self.assertEqual(len(r), 4)
+        self.assertTrue(all(k in prism.STRATEGY_KEYS for k in r))
 
-    def test_invalid_strategy_filtered(self):
-        state = {'strategy_weights': {k: 1.0 for k in prism.STRATEGY_KEYS}}
-        config = {'strategies': ['nonexistent', 'pre_mortem'], 'num_perspectives': 4}
-        result = prism._select_strategies(state, config)
-        self.assertEqual(result, ['pre_mortem'])
+    def test_auto_count_and_membership(self):
+        r = prism._select_strategies({'strategies': 'auto', 'num_perspectives': 4})
+        self.assertEqual(len(r), 4)
+        self.assertTrue(all(k in prism.STRATEGY_KEYS for k in r))
+
+    def test_default_never_selected(self):
+        for _ in range(20):
+            self.assertNotIn('default', prism._select_strategies({'num_perspectives': 5}))
 
 
-class TestMeasureDirection(unittest.TestCase):
-    def test_stable_when_no_change(self):
-        result = prism._measure_direction(
-            "I think X is true", "I think X is true",
-            {'default': 'X is complicated', 'pre_mortem': 'X will fail'}
-        )
-        self.assertEqual(result, 'stable')
+class TestRevisitCandidate(unittest.TestCase):
+    def test_skips_check_and_revisited(self):
+        sessions = [
+            {'session_type': 'check', 'question': 'c'},
+            {'session_type': 'shift', 'position_after': 'a', 'revisit': {}},
+            {'session_type': 'shift', 'position_after': 'later'},
+        ]
+        self.assertIs(prism._revisit_candidate(sessions), sessions[2])
 
-    def test_unknown_when_no_before(self):
-        result = prism._measure_direction(
-            None, "something", {'default': 'response'}
-        )
-        self.assertEqual(result, 'unknown')
+    def test_skips_no_after(self):
+        sessions = [{'session_type': 'unmeasured', 'position_after': None},
+                    {'session_type': 'shift', 'position_after': 'x'}]
+        self.assertIs(prism._revisit_candidate(sessions), sessions[1])
 
-    def test_unknown_when_no_after(self):
-        result = prism._measure_direction(
-            "something", None, {'default': 'response'}
-        )
-        self.assertEqual(result, 'unknown')
+    def test_returns_oldest(self):
+        sessions = [{'position_after': 'first'}, {'position_after': 'second'}]
+        self.assertIs(prism._revisit_candidate(sessions), sessions[0])
 
+    def test_legacy_eligible(self):
+        sessions = [{'human_after': 'legacy answer'}]
+        self.assertIs(prism._revisit_candidate(sessions), sessions[0])
 
-class TestMeasureIndependence(unittest.TestCase):
-    def test_none_when_no_after(self):
-        result = prism._measure_independence(None, {'default': 'response'})
-        self.assertIsNone(result)
-
-    def test_low_when_identical_to_response(self):
-        text = "This is the exact response text"
-        result = prism._measure_independence(text, {'default': text})
-        self.assertIsNotNone(result)
-        self.assertLess(result, 0.2)
-
-    def test_range_zero_to_one(self):
-        result = prism._measure_independence(
-            "completely different text about bananas",
-            {'default': 'analysis of quantum computing trends'}
-        )
-        if result is not None:
-            self.assertGreaterEqual(result, 0.0)
-            self.assertLessEqual(result, 1.0)
+    def test_none_when_empty(self):
+        self.assertIsNone(prism._revisit_candidate([]))
 
 
-class TestPrintWrapped(unittest.TestCase):
-    def test_short_line_no_wrap(self):
-        """Should not raise."""
-        import io, sys
-        captured = io.StringIO()
-        sys.stdout = captured
-        try:
-            prism._print_wrapped("short text", indent=4, width=76)
-        finally:
-            sys.stdout = sys.__stdout__
-        self.assertIn("short text", captured.getvalue())
+class TestReadConviction(unittest.TestCase):
+    def _conv(self, val):
+        with mock.patch('sys.stdin', _tty(True)), mock.patch('builtins.input', return_value=val):
+            return prism._read_conviction()
 
-    def test_long_line_wraps(self):
-        import io, sys
-        captured = io.StringIO()
-        sys.stdout = captured
-        long = "word " * 30  # ~150 chars
-        try:
-            prism._print_wrapped(long, indent=4, width=40)
-        finally:
-            sys.stdout = sys.__stdout__
-        lines = captured.getvalue().strip().split('\n')
-        self.assertGreater(len(lines), 1)
+    def test_valid(self):
+        self.assertEqual(self._conv('85'), 85)
+        self.assertEqual(self._conv('0'), 0)
+        self.assertEqual(self._conv('100'), 100)
+
+    def test_percent_stripped(self):
+        self.assertEqual(self._conv('85%'), 85)
+
+    def test_out_of_range(self):
+        self.assertIsNone(self._conv('101'))
+        self.assertIsNone(self._conv('-3'))
+
+    def test_non_numeric(self):
+        self.assertIsNone(self._conv('abc'))
+        self.assertIsNone(self._conv(''))
+
+    def test_unicode_digit_like(self):
+        # str.isdigit() is True for these but int() would raise — must not crash
+        self.assertIsNone(self._conv('²'))
+        self.assertIsNone(self._conv('¹²'))
+
+    def test_non_tty_returns_none(self):
+        with mock.patch('sys.stdin', _tty(False)):
+            self.assertIsNone(prism._read_conviction())
+
+
+class TestPromptContent(unittest.TestCase):
+    def test_all_strategies_have_accuracy_guard(self):
+        for key, s in prism.STRATEGIES.items():
+            self.assertIn('verifiable', s['system'], f"{key} missing accuracy guard")
+
+    def test_no_absolutist_tone(self):
+        for key, s in prism.STRATEGIES.items():
+            self.assertNotIn('commit fully', s['system'], key)
+            self.assertNotIn('No hedging', s['system'], key)
 
 
 class TestContrastiveScaffolding(unittest.TestCase):
-    def test_generate_perspectives_passes_default_to_strategies(self):
-        """Contrastive prefix should include default response text."""
+    def test_default_passed_and_refute_instruction(self):
         calls = []
         def mock_llm(system, user, config):
             calls.append({'system': system, 'user': user})
@@ -300,127 +229,98 @@ class TestContrastiveScaffolding(unittest.TestCase):
         original = prism._llm_call
         prism._llm_call = mock_llm
         try:
-            results = prism._generate_perspectives(
-                'test question', ['devils_advocate'], {'provider': 'mock', 'max_tokens': 100}, quiet=True)
+            prism._generate_perspectives('test question', ['devils_advocate'],
+                                         {'provider': 'mock', 'max_tokens': 100}, quiet=True)
         finally:
             prism._llm_call = original
-        # First call is default, second is the strategy
         self.assertGreaterEqual(len(calls), 2)
         strategy_call = calls[-1]
         self.assertIn('conventional AI answer', strategy_call['user'])
         self.assertIn('mock response', strategy_call['user'])
+        self.assertIn('refute', strategy_call['user'])
 
 
-class TestConvergenceProtection(unittest.TestCase):
-    def test_bottom_half_forced(self):
-        """At least 1 strategy from bottom half should be included."""
-        weights = {k: 1.0 for k in prism.STRATEGY_KEYS}
-        # Make first 5 very high, rest very low
-        for i, k in enumerate(prism.STRATEGY_KEYS):
-            weights[k] = 5.0 if i < 5 else 0.2
-        state = {'strategy_weights': weights, 'sessions': []}
-        config = {'strategies': 'auto', 'num_perspectives': 4}
-        bottom_half = prism.STRATEGY_KEYS[len(prism.STRATEGY_KEYS)//2:]
-        # Run multiple times to check it's not just luck
-        found_bottom = False
-        for _ in range(20):
-            result = prism._select_strategies(state, config)
-            if any(s in bottom_half for s in result):
-                found_bottom = True
-                break
-        self.assertTrue(found_bottom, "Bottom-half strategy never selected in 20 tries")
+class TestRebuttal(unittest.TestCase):
+    def test_none_when_non_tty(self):
+        with mock.patch('sys.stdin', _tty(False)):
+            self.assertIsNone(prism._rebuttal_round('q', ['pre_mortem'], {'pre_mortem': 't'}, {}))
 
-    def test_weight_ratio_cap(self):
-        """No weight should exceed 3x the lowest after update."""
-        state = {
-            'strategy_weights': {k: 1.0 for k in prism.STRATEGY_KEYS},
-            'sessions': [],
-        }
-        # Boost one strategy heavily
-        for _ in range(50):
-            prism._update_weights(state, ['pre_mortem'], 'pre_mortem', 'reframing', 'stable')
-        w = state['strategy_weights']
-        min_w = min(w.values())
-        max_w = max(w.values())
-        self.assertLessEqual(max_w, min_w * 3.0 + 0.01)
-
-    def test_no_monoculture_after_100_sessions(self):
-        """After 100 sessions favoring one strategy, diversity should survive."""
-        state = {
-            'strategy_weights': {k: 1.0 for k in prism.STRATEGY_KEYS},
-            'sessions': [{'session_type': 'reframing'}] * 100,
-        }
-        for _ in range(100):
-            prism._update_weights(state, ['pre_mortem'], 'pre_mortem', 'reframing', 'stable')
-        w = state['strategy_weights']
-        ratio = max(w.values()) / min(w.values())
-        self.assertLess(ratio, 4.0, "Weight ratio too extreme after 100 sessions")
-
-
-class TestReframingDetection(unittest.TestCase):
-    def test_reframing_without_question_mark(self):
-        """Semantic mode should detect reframing without '?' when before_text provided."""
-        if not prism._load_embedder():
-            self.skipTest("No embedder available")
-        result = prism._classify_session(
-            conf_before=7, conf_after=6, shift=0.3,
-            direction='independent',
-            after_text='I think the real issue is team communication not the technology choice',
-            question='Should we use GraphQL or REST?',
-            before_text='REST is better because it is simpler',
-        )
-        self.assertEqual(result, 'reframing')
-
-    def test_lexical_fallback_requires_question_mark(self):
-        """Without embedder or before_text, '?' heuristic should be used."""
-        # Force lexical mode by not providing before_text
-        result = prism._classify_session(
-            conf_before=7, conf_after=6, shift=0.3,
-            direction='independent',
-            after_text='I think the real issue is team communication not the technology choice',
-            question='Should we use GraphQL or REST?',
-            before_text=None,
-        )
-        # Without '?' in after_text and no before_text, should NOT be reframing
-        self.assertNotEqual(result, 'reframing')
-
-
-class TestActiveConvergenceResponse(unittest.TestCase):
-    def test_high_adoption_triggers_random(self):
-        """>50% adoption in last 10 sessions should trigger full random."""
-        state = {
-            'strategy_weights': {k: 1.0 for k in prism.STRATEGY_KEYS},
-            'sessions': [{'session_type': 'adoption'}] * 8 + [{'session_type': 'shift'}] * 2,
-        }
-        # Make weights very unequal to test that randomization overrides them
-        state['strategy_weights']['pre_mortem'] = 5.0
-        config = {'strategies': 'auto', 'num_perspectives': 4}
-        import io, sys
-        captured = io.StringIO()
-        sys.stdout = captured
+    def test_reply_uses_strategy_system_and_pushback(self):
+        calls = []
+        original = prism._llm_call
+        prism._llm_call = lambda s, u, c: (calls.append((s, u)) or 'reply')
         try:
-            results = set()
-            for _ in range(30):
-                result = prism._select_strategies(state, config)
-                results.update(result)
+            with mock.patch('sys.stdin', _tty(True)), \
+                 mock.patch('builtins.input', side_effect=['1', 'I disagree because X']), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                r = prism._rebuttal_round('Q', ['pre_mortem'], {'pre_mortem': 'persp'}, {})
         finally:
-            sys.stdout = sys.__stdout__
-        # With random selection over 30 tries, should see many different strategies
-        self.assertGreater(len(results), 4, "Randomization should produce variety")
-        self.assertIn('diversifying', captured.getvalue())
+            prism._llm_call = original
+        self.assertEqual(r, {'strategy': 'pre_mortem', 'text': 'I disagree because X'})
+        self.assertEqual(calls[0][0], prism.STRATEGIES['pre_mortem']['system'])
+        self.assertIn('I disagree because X', calls[0][1])
 
-    def test_low_adoption_no_trigger(self):
-        """<=50% adoption should not trigger randomization."""
-        state = {
-            'strategy_weights': {k: 1.0 for k in prism.STRATEGY_KEYS},
-            'sessions': [{'session_type': 'adoption'}] * 3 + [{'session_type': 'shift'}] * 7,
+    def test_skip_on_empty_choice(self):
+        with mock.patch('sys.stdin', _tty(True)), \
+             mock.patch('builtins.input', return_value=''), \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertIsNone(prism._rebuttal_round('Q', ['pre_mortem'], {'pre_mortem': 'p'}, {}))
+
+
+class TestNonTTYExplore(unittest.TestCase):
+    def test_logs_unmeasured_session_no_prompts(self):
+        saved = []
+        tmp = Path(tempfile.mkdtemp())
+        # Point the real _log at a temp dir instead of stubbing it — explore's final
+        # log line contains a literal '→', which must not crash the run (cp1252 regression).
+        patches = {
+            '_llm_call': lambda s, u, c: 'response ' + s[:8],
+            '_load_config': lambda: {'provider': 'mock', 'model': 'm',
+                                     'num_perspectives': 3, 'num_shown': 3, 'max_tokens': 300},
+            '_load_state': lambda: prism._new_state(),
+            '_save_state': lambda st: saved.append(st),
+            'CONFIG_DIR': tmp,
+            'LOG_FILE': tmp / 'prism.log',
         }
-        state['strategy_weights']['pre_mortem'] = 5.0
-        state['strategy_weights']['blind_spot'] = 4.0
-        config = {'strategies': 'auto', 'num_perspectives': 4}
-        result = prism._select_strategies(state, config)
-        # Should still use weighted selection, not random
-        self.assertIn('pre_mortem', result[:2])
+        originals = {k: getattr(prism, k) for k in patches}
+        for k, v in patches.items():
+            setattr(prism, k, v)
+        out = io.StringIO()
+        try:
+            with mock.patch('sys.stdin', _tty(False)), contextlib.redirect_stdout(out):
+                prism.explore('should we ship on friday')
+        finally:
+            for k, v in originals.items():
+                setattr(prism, k, v)
+        self.assertTrue(saved, "no session saved")
+        sess = saved[0]['sessions'][-1]
+        self.assertEqual(sess['schema'], 'v3')
+        self.assertEqual(sess['session_type'], 'unmeasured')
+        self.assertIsNone(sess['position_before'])
+        self.assertIsNone(sess['conviction_before'])
+        self.assertNotIn('  > ', out.getvalue())  # no interactive prompt lines
+
+
+class TestLog(unittest.TestCase):
+    def test_handles_non_ascii(self):
+        tmp = Path(tempfile.mkdtemp())
+        with mock.patch('prism.CONFIG_DIR', tmp), mock.patch('prism.LOG_FILE', tmp / 'l.log'):
+            prism._log('type=shift conv=40→70 café \U0001f600')  # must not raise
+        self.assertIn('40', (tmp / 'l.log').read_text(encoding='utf-8'))
+
+
+class TestPrintWrapped(unittest.TestCase):
+    def test_short_line_no_wrap(self):
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            prism._print_wrapped("short text", indent=4, width=76)
+        self.assertIn("short text", captured.getvalue())
+
+    def test_long_line_wraps(self):
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            prism._print_wrapped("word " * 30, indent=4, width=40)
+        self.assertGreater(len(captured.getvalue().strip().split('\n')), 1)
 
 
 if __name__ == '__main__':

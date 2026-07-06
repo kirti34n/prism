@@ -1,0 +1,12 @@
+{
+  "name": "prism",
+  "owner": { "name": "keerti" },
+  "plugins": [
+    {
+      "name": "prism",
+      "source": "./",
+      "description": "Divergent perspectives and conclusion challenges using research-backed cognitive strategies.",
+      "category": "thinking"
+    }
+  ]
+}

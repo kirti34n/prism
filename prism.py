@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Prism — Think different. Not different answers. Different angles.
+Prism — a decision journal for the AI era.
 
-One question through multiple lenses. Measures how your thinking shifts.
+Record what you thought before and after consulting an AI, get evidence-based
+counterarguments to the AI's default answer, and track your own trajectory.
 Research-backed structural constraints. Zero dependencies.
 
   prism "question"              # explore: position → perspectives → revised position
@@ -11,12 +12,12 @@ Research-backed structural constraints. Zero dependencies.
   prism quick "question"        # just show perspectives, no measurement
   prism think                   # random prompt → explore
   prism insights                # your thinking patterns over time
+  prism revisit                 # look back at a past session — were you right?
   prism history                 # recent sessions
   prism config [key] [val]      # show or set configuration
-  prism setup install           # make 'prism' a global command
-  prism setup claude            # Claude Code (/prism slash command)
-  prism setup gemini            # Gemini CLI
-  prism setup all               # all tool integrations
+  prism setup install           # how to install the 'prism' command
+  prism setup claude            # Claude Code plugin (/prism, /prism-check)
+  prism setup all               # all AI-tool integration paths
   prism json "question"         # machine-readable output
   prism json --check "concl"    # machine-readable check output
   prism reset                   # fresh start
@@ -32,20 +33,17 @@ from pathlib import Path
 from datetime import datetime
 from collections import Counter
 
-VERSION = 2
-__version__ = '2.3.0'
+VERSION = 3
+__version__ = '3.0.0'
 
 # ============================================================
 # CONSTANTS
 # ============================================================
 
-# Measurement thresholds
-REFRAMING_DISTANCE = 0.3
-RECONCEPTUALIZATION_SHIFT = 0.15
-DIRECTION_THRESHOLD = 0.05
-INDEPENDENCE_SCALING = 0.6
-DESTABILIZATION_CONFIDENCE_DROP = 3
-SHIFT_THRESHOLD = 0.1
+# Conviction is self-reported on a 0-100 scale. A drop this large flags
+# "destabilization" — ~2x the noise band of a 0-100 self-report, and larger
+# than typical persuasion-RCT effects (5-15 pts), so it catches genuine doubt.
+DESTABILIZATION_DROP = 20
 INPUT_TRUNCATION_LIMIT = 500
 
 # Operational limits
@@ -54,10 +52,6 @@ MAX_SESSIONS = 500
 OLLAMA_TIMEOUT = 120
 API_TIMEOUT = 60
 GEMINI_TIMEOUT = 90
-
-# Strategy weight bounds
-WEIGHT_MIN = 0.1
-WEIGHT_MAX = 5.0
 
 # ============================================================
 # PATHS
@@ -78,8 +72,8 @@ def _find_project_config():
         f = d / '.prism.json'
         if f.exists():
             try:
-                return json.loads(f.read_text())
-            except (json.JSONDecodeError, OSError):
+                return json.loads(f.read_text(encoding='utf-8'))
+            except (json.JSONDecodeError, OSError, ValueError):
                 pass
         parent = d.parent
         if parent == d:
@@ -92,15 +86,15 @@ def _load_global_config():
     f = CONFIG_DIR / 'config.json'
     if f.exists():
         try:
-            return json.loads(f.read_text())
-        except (json.JSONDecodeError, OSError):
+            return json.loads(f.read_text(encoding='utf-8'))
+        except (json.JSONDecodeError, OSError, ValueError):
             pass
     return {}
 
 
 def _save_global_config(cfg):
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    (CONFIG_DIR / 'config.json').write_text(json.dumps(cfg, indent=2))
+    (CONFIG_DIR / 'config.json').write_text(json.dumps(cfg, indent=2), encoding='utf-8')
 
 
 def _detect_provider():
@@ -146,43 +140,13 @@ def _load_config():
 # MEASUREMENT
 # ============================================================
 
-_EMBEDDER = None
-_EMBEDDER_CHECKED = False
-_EMB_CACHE = {}
-
-
-def _load_embedder():
-    global _EMBEDDER, _EMBEDDER_CHECKED
-    if _EMBEDDER_CHECKED:
-        return _EMBEDDER
-    _EMBEDDER_CHECKED = True
-    try:
-        from sentence_transformers import SentenceTransformer
-        _EMBEDDER = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
-    except ImportError:
-        _EMBEDDER = None
-    return _EMBEDDER
-
-
-def _embed(text):
-    model = _load_embedder()
-    if model is None:
-        return None
-    key = hashlib.md5(text.encode()).hexdigest()[:16]
-    if key not in _EMB_CACHE:
-        _EMB_CACHE[key] = model.encode(text, normalize_embeddings=True).tolist()
-    return _EMB_CACHE[key]
-
-
-def _cosine_distance_emb(a: list[float], b: list[float]) -> float:
-    return max(0.0, 1.0 - sum(x * y for x, y in zip(a, b)))
-
-
 def _tokenize(text: str) -> list[str]:
     return re.findall(r'\b\w+\b', text.lower())
 
 
 def _bow_distance(a: str, b: str) -> float:
+    """Bag-of-words cosine distance. USED ONLY to order perspectives for display.
+    Makes no claim about opinion change — see _classify_session for that."""
     va, vb = Counter(_tokenize(a)), Counter(_tokenize(b))
     inter = set(va) & set(vb)
     if not inter:
@@ -196,76 +160,23 @@ def _bow_distance(a: str, b: str) -> float:
     return max(0.0, round(d, 10))
 
 
-def _distance(a: str, b: str) -> float:
-    ea, eb = _embed(a), _embed(b)
-    if ea is not None and eb is not None:
-        return _cosine_distance_emb(ea, eb)
-    return _bow_distance(a, b)
-
-
-def _measurement_method():
-    return 'semantic' if _load_embedder() else 'lexical'
-
-
-def _measure_direction(before: str | None, after: str | None, responses: dict[str, str]) -> str:
-    if not before or not after:
-        return 'unknown'
-    bd = {k: _distance(before, v) for k, v in responses.items() if v}
-    ad = {k: _distance(after, v) for k, v in responses.items() if v}
-    if not bd or not ad:
-        return 'unknown'
-    bn = min(bd.values())
-    ank = min(ad, key=ad.get)
-    an = ad[ank]
-    if an < bn - DIRECTION_THRESHOLD:
-        return f'toward_{ank}'
-    elif an > bn + DIRECTION_THRESHOLD:
-        return 'independent'
-    return 'stable'
-
-
-def _measure_independence(after: str | None, responses: dict[str, str]) -> float | None:
-    if not after:
-        return None
-    dists = [_distance(after, v) for v in responses.values() if v]
-    return min(1.0, min(dists) / INDEPENDENCE_SCALING) if dists else None
-
-
-def _classify_session(conf_before: int | None, conf_after: int | None, shift: float | None,
-                      direction: str, after_text: str | None, question: str,
-                      before_text: str | None = None) -> str:
-    """Classify session based on confidence + text + direction signals."""
-    # Reframing: user changed the question or frame
-    if _load_embedder() and before_text:
-        # Semantic: detect reframing without requiring '?' — catches "I think the real issue is X"
-        is_reframing = (after_text
-                        and _distance(question, after_text) > REFRAMING_DISTANCE
-                        and _distance(before_text, after_text) > REFRAMING_DISTANCE)
-    else:
-        # Lexical fallback (or no before_text): keep '?' heuristic
-        is_reframing = (after_text and '?' in after_text
-                        and _distance(question, after_text) > REFRAMING_DISTANCE)
-    if is_reframing:
+def _classify_session(self_category, conv_before, conv_after, moved_by):
+    """Classify from self-report + conviction delta only. The user's own
+    category is authoritative; text distance plays no part. First match wins."""
+    if self_category == 'different_question':
         return 'reframing'
-
-    # Destabilization: confidence dropped significantly
-    if conf_before is not None and conf_after is not None:
-        if conf_after - conf_before <= -DESTABILIZATION_CONFIDENCE_DROP:
+    if conv_before is not None and conv_after is not None:
+        if conv_after - conv_before <= -DESTABILIZATION_DROP:
             return 'destabilization'
-
-    # Adoption: moved toward a model response
-    if direction and direction.startswith('toward_'):
+    if moved_by and self_category in ('shifted', 'switched'):
         return 'adoption'
-
-    # Reconceptualization: genuine shift in independent direction
-    if shift is not None and shift > RECONCEPTUALIZATION_SHIFT and direction == 'independent':
-        return 'reconceptualization'
-
-    # Some shift but not clearly classified
-    if shift is not None and shift > SHIFT_THRESHOLD:
+    if self_category == 'switched':
+        return 'switch'
+    if self_category == 'shifted':
         return 'shift'
-
-    return 'unshaken'
+    if self_category == 'same':
+        return 'unshaken'
+    return 'unmeasured'
 
 
 # ============================================================
@@ -416,68 +327,72 @@ def _llm_call(system_prompt: str, user_prompt: str, config: dict) -> str:
 # STRATEGIES — research-backed structural constraints
 # ============================================================
 
+_ACCURACY_GUARD = ('Only cite real, verifiable examples; if unsure whether an example '
+                   'is real, say so rather than inventing one.')
+_CALIBRATE = 'State this at the confidence the evidence supports.'
+
 STRATEGIES = {
     'default': {
         'name': 'Default',
-        'system': 'Answer the question directly. Give the most practical, well-reasoned answer you can. Include specific technologies, approaches, or steps — not vague principles. If there are trade-offs, name them concretely.',
+        'system': 'Answer the question directly. Give the most practical, well-reasoned answer you can. Include specific technologies, approaches, or steps — not vague principles. If there are trade-offs, name them concretely. ' + _ACCURACY_GUARD,
     },
     # === Evidence-backed general strategies ===
     'devils_advocate': {
         'name': "Devil's Advocate",
-        'system': 'Argue AGAINST the most likely answer. No hedging, no "both sides." Take the opposing position and defend it like you believe it. Name specific real-world examples where the popular approach failed. Attack the weakest assumptions. Make the reader uncomfortable with the conventional wisdom.',
+        'system': 'Argue against the answer you are shown. Identify its single strongest claim and refute it directly — explain the mechanism by which it fails, not just that it can fail. ' + _ACCURACY_GUARD + ' State objections at the confidence the evidence earns: label strong objections as strong and speculative ones as speculative. End by naming the one condition under which the conventional answer would still hold.',
         'prefix': 'The common answer is probably obvious. Argue against it:\n\n',
         'evidence': 'Lord, Lepper & Preston 1984 — "consider the opposite" eliminates anchoring',
     },
     'blind_spot': {
         'name': 'Blind Spot',
-        'system': 'Identify exactly ONE hidden assumption or overlooked constraint that changes the entire framing. Not a minor detail — a structural blind spot that, once seen, makes the obvious answer look naive. Explain the specific mechanism that keeps people from seeing it. Give a concrete example of what goes wrong when it is missed.',
+        'system': 'Identify exactly ONE hidden assumption or overlooked constraint that changes the entire framing — a structural blind spot that, once seen, makes the answer you were shown look naive. Show specifically how that answer depends on the assumption, and explain the mechanism that keeps people from seeing it. Give a concrete example of what goes wrong when it is missed. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'What is the one thing most people miss:\n\n',
     },
     'first_principles': {
         'name': 'First Principles',
-        'system': 'Strip away every inherited assumption. Name the 2-3 things "everyone knows" that might be wrong. For each, describe the specific scenario where it breaks down, cite a real precedent if possible, and show what answer you get when you rebuild without that assumption. The rebuilt answer should surprise.',
+        'system': 'Strip away every inherited assumption behind the answer you were shown. Name the 2-3 things "everyone knows" that might be wrong. For each, describe the specific scenario where it breaks down, cite a real precedent if you have one, and show what answer you get when you rebuild without that assumption. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'Break this down to first principles:\n\n',
         'evidence': 'Koriat 1980 — counterargument generation calibrates confidence',
     },
     'inversion': {
         'name': 'Inversion',
-        'system': 'Answer the exact OPPOSITE question. If they ask how to succeed, write a detailed recipe for guaranteed failure — specific steps, specific mistakes, specific bad decisions. Be thorough and concrete. Then explicitly state what the original answer was hiding that the inversion reveals.',
+        'system': 'Answer the exact OPPOSITE question. If they ask how to succeed, write a detailed recipe for guaranteed failure — specific steps, specific mistakes, specific bad decisions. Then state explicitly what the answer you were shown was hiding that the inversion reveals. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'Answer the opposite:\n\n',
         'evidence': 'Mussweiler 2000 — considering the opposite eliminates anchoring in expert judgment',
     },
     'systems': {
         'name': 'Systems',
-        'system': 'Ignore the direct answer. Map the second-order and third-order effects. What breaks, shifts, or emerges BECAUSE of the obvious answer? Follow each causal chain at least three steps with specific examples. Name the feedback loops. Identify where the system will fight back against the intended change.',
+        'system': 'Set aside the direct answer and map its second- and third-order effects. What breaks, shifts, or emerges BECAUSE of the answer you were shown? Follow each causal chain at least three steps with specific examples, and name the feedback loops. Identify where the system will fight back against the intended change. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'What are the downstream consequences:\n\n',
     },
     'stakeholder': {
         'name': 'Stakeholder',
-        'system': 'Identify who gets harmed, marginalized, or locked out by the conventional approach. Tell the story entirely from their perspective — their constraints, their frustrations, their alternatives. Name specific scenarios. Make the reader feel the friction the standard answer creates for someone who is not the assumed user.',
+        'system': 'Identify who gets harmed, marginalized, or locked out by the answer you were shown. Tell the story from their perspective — their constraints, their frustrations, their alternatives — and name specific scenarios that make the friction concrete for someone who is not the assumed user. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'Who loses when we answer this the standard way:\n\n',
         'evidence': 'Galinsky & Moskowitz 2000 — perspective-taking reduces bias',
     },
     # === Research-specific strategies (evidence-backed) ===
     'pre_mortem': {
         'name': 'Pre-Mortem',
-        'system': 'It is 18 months from now. This approach was pursued and FAILED. The failure was predictable in hindsight. Write the post-mortem: name the specific failure mode, the early warning signs that were rationalized away, the moment the team should have pivoted but did not. Be brutally concrete — "the API rate limits hit at 10K users and there was no fallback" not "scalability was an issue."',
+        'system': 'It is 18 months from now. The answer you were shown was followed and it FAILED. Write the post-mortem: name the specific failure mode, the early warning signs that were rationalized away, and the moment the team should have pivoted but did not. Be concrete — "the API rate limits hit at 10K users and there was no fallback," not "scalability was an issue." ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'Assume this has already failed:\n\n',
         'evidence': 'Klein 2007 — prospective hindsight generates 30% more failure reasons, reduces overconfidence',
     },
     'alternative_hypothesis': {
         'name': 'Alt Hypothesis',
-        'system': 'Name 3 genuinely different explanations or approaches for the same problem. Not variations on a theme — structurally different mechanisms or architectures. For each, state (a) the core insight that makes it work, (b) one specific scenario where it outperforms the obvious answer, and (c) the exact test or metric that would distinguish between them.',
+        'system': 'Name 3 genuinely different explanations or approaches for the same problem — structurally different mechanisms, not variations on the answer you were shown. For each, state (a) the core insight that makes it work, (b) one specific scenario where it outperforms that answer, and (c) the exact test or metric that would distinguish between them. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'What else could explain this:\n\n',
         'evidence': 'Hirt & Markman 1995 — any alternative triggers debiasing simulation mindset',
     },
     'falsification': {
         'name': 'Falsification',
-        'system': 'Design the exact test that would DISPROVE this approach. Name the specific metric, threshold, and scenario. "If X does not achieve Y under condition Z within timeframe W, this approach is wrong." If no test can disprove it, that itself is a red flag — explain exactly why unfalsifiable plans are dangerous and what would make this one testable.',
+        'system': 'Design the exact test that would DISPROVE the answer you were shown. Name the specific metric, threshold, and scenario: "If X does not achieve Y under condition Z within timeframe W, this approach is wrong." If no test can disprove it, that is itself a red flag — explain why unfalsifiable plans are dangerous and what would make this one testable. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'What would disprove this:\n\n',
         'evidence': 'Tetlock 2015 — superforecasters are 60% more accurate; falsification thinking is their key habit',
     },
     'adjacent_field': {
         'name': 'Adjacent Field',
-        'system': 'Pick a specific field that has already solved an analogous problem. Name the field, the specific technique or framework, and how it maps onto this problem in concrete terms. Use their vocabulary. Describe what a practitioner from that field would do differently in the first week of this project. The reframing should produce at least one specific, actionable idea the original framing would never generate.',
+        'system': 'Pick a specific field that has already solved an analogous problem. Name the field, the specific technique or framework, and how it maps onto this problem in concrete terms, using their vocabulary. Describe what a practitioner from that field would do differently in the first week — at least one specific, actionable idea the answer you were shown would never generate. ' + _ACCURACY_GUARD + ' ' + _CALIBRATE,
         'prefix': 'How would a different field see this:\n\n',
         'evidence': 'Uzzi 2013 (Science, 17.9M papers) — atypical combinations produce 2x citation impact',
     },
@@ -489,39 +404,14 @@ STRATEGY_KEYS = [k for k in STRATEGIES if k != 'default']
 CHECK_STRATEGIES = ['pre_mortem', 'alternative_hypothesis', 'falsification', 'blind_spot']
 
 
-def _select_strategies(state, config):
-    strategies_cfg = config.get('strategies', 'auto')
+def _select_strategies(config):
     n = config.get('num_perspectives', 4)
-    if isinstance(strategies_cfg, list):
-        valid = [k for k in strategies_cfg if k in STRATEGIES and k != 'default']
+    cfg = config.get('strategies', 'auto')
+    if isinstance(cfg, list):
+        valid = [k for k in cfg if k in STRATEGIES and k != 'default']
         if valid:
             return valid[:n]
-    # Active convergence response: high adoption rate → full random
-    sessions = state.get('sessions', [])
-    recent = sessions[-10:] if len(sessions) >= 10 else sessions
-    if recent:
-        adoption_rate = sum(1 for s in recent if s.get('session_type') == 'adoption') / len(recent)
-        if adoption_rate > 0.5:
-            print("  [!] High adoption rate detected — diversifying perspectives")
-            return random.sample(STRATEGY_KEYS, min(n, len(STRATEGY_KEYS)))
-
-    weights = state.get('strategy_weights', {})
-    scored = [(k, weights.get(k, 1.0)) for k in STRATEGY_KEYS]
-    # Cold start: when all weights are equal, fully randomize
-    unique_weights = set(w for _, w in scored)
-    if len(unique_weights) <= 1:
-        return random.sample([k for k, _ in scored], min(n, len(scored)))
-    scored.sort(key=lambda x: x[1], reverse=True)
-    top = [s[0] for s in scored[:min(2, len(scored))]]
-    remaining = [s[0] for s in scored if s[0] not in top]
-    n_explore = min(n - len(top), len(remaining))
-    explore_picks = random.sample(remaining, n_explore) if n_explore > 0 else []
-    selected = (top + explore_picks)[:n]
-    # Force at least 1 from bottom half (convergence protection)
-    bottom_half = [s[0] for s in scored[len(scored)//2:]]
-    if not any(s in bottom_half for s in selected):
-        selected[-1] = random.choice(bottom_half)
-    return selected
+    return random.sample(STRATEGY_KEYS, min(n, len(STRATEGY_KEYS)))
 
 
 def _generate_perspectives(question, strategies, config, quiet=False):
@@ -543,7 +433,7 @@ def _generate_perspectives(question, strategies, config, quiet=False):
             s = STRATEGIES[key]
             contrastive = ''
             if default_resp:
-                contrastive = f"The conventional AI answer is:\n{default_resp[:400]}\n\nNow challenge that specific answer.\n\n"
+                contrastive = f"The conventional AI answer is:\n{default_resp[:400]}\n\nIdentify its key claim and refute it specifically.\n\n"
             resp = _llm_call(s['system'], contrastive + s.get('prefix', '') + question, config)
             with lock:
                 results[key] = resp
@@ -571,9 +461,18 @@ def _new_state():
         'version': VERSION,
         'id': hashlib.sha256(str(time.time()).encode()).hexdigest()[:12],
         'created': datetime.now().isoformat(),
-        'strategy_weights': {k: 1.0 for k in STRATEGY_KEYS},
         'sessions': [],
     }
+
+
+def _migrate_v2(data):
+    """v2 → v3: keep every old session (tagged legacy so readers can skip it in
+    metrics), drop the bandit weights. Pure and idempotent — no save inside."""
+    for s in data.get('sessions', []):
+        s.setdefault('schema', 'v2-legacy')
+    data.pop('strategy_weights', None)
+    data['version'] = VERSION
+    return data
 
 
 def _migrate_legacy_state():
@@ -581,13 +480,11 @@ def _migrate_legacy_state():
     legacy = Path(__file__).parent / 'prism_state.json'
     if legacy.exists() and not STATE_FILE.exists():
         try:
-            old = json.loads(legacy.read_text())
+            old = json.loads(legacy.read_text(encoding='utf-8'))
             new = _new_state()
             new['sessions'] = old.get('sessions', [])
-            for k in STRATEGY_KEYS:
-                w = old.get('strategy_weights', {}).get(k)
-                if w:
-                    new['strategy_weights'][k] = w
+            for s in new['sessions']:
+                s.setdefault('schema', 'v2-legacy')
             _save_state(new)
             return new
         except (json.JSONDecodeError, OSError, KeyError, TypeError):
@@ -599,10 +496,16 @@ def _load_state():
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     if STATE_FILE.exists():
         try:
-            data = json.loads(STATE_FILE.read_text())
+            data = json.loads(STATE_FILE.read_text(encoding='utf-8'))
             if data.get('version') == VERSION:
                 return data
-        except (json.JSONDecodeError, OSError, KeyError, TypeError):
+            # Any older/unrecognized-but-parseable version that still holds sessions
+            # is migrated, not discarded — never silently drop a user's history.
+            if data.get('sessions') is not None:
+                data = _migrate_v2(data)
+                _save_state(data)
+                return data
+        except (json.JSONDecodeError, OSError, KeyError, TypeError, ValueError):
             pass
     migrated = _migrate_legacy_state()
     return migrated if migrated else _new_state()
@@ -615,61 +518,14 @@ def _save_state(state):
     if len(sessions) > MAX_SESSIONS:
         state['sessions'] = sessions[-MAX_SESSIONS:]
     tmp = STATE_FILE.with_suffix('.tmp')
-    tmp.write_text(json.dumps(state, indent=2))
+    tmp.write_text(json.dumps(state, indent=2), encoding='utf-8')
     tmp.replace(STATE_FILE)
 
 
 def _log(msg):
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_FILE, 'a') as f:
+    with open(LOG_FILE, 'a', encoding='utf-8') as f:
         f.write(f"[{datetime.now().isoformat()}] {msg}\n")
-
-
-# ============================================================
-# FEEDBACK
-# ============================================================
-
-def _update_weights(state: dict, shown: list[str], rated: str | None,
-                    session_type: str, direction: str) -> None:
-    w = state.get('strategy_weights', {})
-    for key in shown:
-        w[key] = w.get(key, 1.0) * 1.02
-    if rated and rated in w:
-        w[rated] = w[rated] * 1.2
-        for key in shown:
-            if key != rated:
-                w[key] = w.get(key, 1.0) * 0.95
-    if session_type in ('reframing', 'reconceptualization', 'destabilization'):
-        for key in shown:
-            w[key] = w.get(key, 1.0) * 1.1
-    elif session_type == 'adoption':
-        for key in shown:
-            w[key] = w.get(key, 1.0) * 0.98
-    elif session_type == 'unshaken':
-        for key in shown:
-            w[key] = w.get(key, 1.0) * 0.95
-    if direction and direction.startswith('toward_'):
-        target = direction.replace('toward_', '')
-        if target in w:
-            w[target] = w.get(target, 1.0) * 1.05
-    # Cap weight ratio: no strategy exceeds 3x the lowest
-    if w:
-        min_w = min(w.values())
-        for key in w:
-            w[key] = min(w[key], min_w * 3.0)
-    # Every 25 sessions, pull extreme weights 20% toward mean
-    n_sessions = len(state.get('sessions', []))
-    if n_sessions > 0 and n_sessions % 25 == 0 and w:
-        mean_w = sum(w.values()) / len(w)
-        for key in w:
-            w[key] = w[key] * 0.8 + mean_w * 0.2
-    # Normalize: weights average to 1.0, clamp to [0.1, 5.0]
-    total = sum(w.values())
-    n_keys = len(w)
-    if total > 0 and n_keys > 0:
-        for key in w:
-            w[key] = max(WEIGHT_MIN, min(WEIGHT_MAX, w[key] * n_keys / total))
-    state['strategy_weights'] = w
 
 
 # ============================================================
@@ -695,50 +551,61 @@ PROMPTS = [
 ]
 
 
-def _read_confidence():
+def _read_conviction(prompt="  Conviction (0-100): "):
     if not sys.stdin.isatty():
         return None
     try:
-        val = input("  Confidence (1-10): ").strip()
-        if val and val.isdigit():
+        val = input(prompt).strip().rstrip('%').strip()
+        if val.isascii() and val.isdigit():
             n = int(val)
-            if 1 <= n <= 10:
+            if 0 <= n <= 100:
                 return n
     except (EOFError, KeyboardInterrupt):
         pass
     return None
 
 
-def explore(question):
-    """Position → perspectives → revised position → measure."""
-    state = _load_state()
-    cfg = _load_config()
+def _read_self_category():
+    if not sys.stdin.isatty():
+        return None
+    cats = {'1': 'same', '2': 'shifted', '3': 'switched', '4': 'different_question'}
+    print("  How did your position change?")
+    print("  (1=same, 2=shifted, 3=switched sides, 4=different question now, Enter=skip)")
+    try:
+        return cats.get(input("  > ").strip())
+    except (EOFError, KeyboardInterrupt):
+        return None
 
-    print(f"\n  PRISM")
-    print(f"  {'=' * 56}")
-    print(f"  {question}")
-    print(f"  {'=' * 56}\n")
 
-    # Before: position + confidence
-    print("  Your position (before seeing anything):", flush=True)
-    human_before = None
-    if sys.stdin.isatty():
-        try:
-            human_before = input("  > ").strip()
-        except (EOFError, KeyboardInterrupt):
-            pass
-    if not human_before:
-        human_before = None
-    conf_before = _read_confidence() if human_before else None
+def _read_moved_by(shown_keys):
+    if not sys.stdin.isatty() or not shown_keys:
+        return None
+    parts = ['0=default'] + [f"{i+1}={STRATEGIES.get(k, {}).get('name', k)}"
+                             for i, k in enumerate(shown_keys)]
+    print(f"  Which moved you most? ({', '.join(parts)}, Enter=none)")
+    try:
+        choice = input("  > ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+    if choice == '0':
+        return 'default'
+    if choice.isdigit() and 1 <= int(choice) <= len(shown_keys):
+        return shown_keys[int(choice) - 1]
+    return None
 
-    # Research mode: deeper analysis
-    is_research = os.environ.pop('PRISM_RESEARCH', None)
-    if is_research:
-        cfg = {**cfg, 'max_tokens': 800, 'num_perspectives': 5, 'num_shown': 5}
 
-    # Generate
-    print(f"\n  Generating perspectives ({cfg.get('provider')}/{cfg.get('model')})...", flush=True)
-    strategies = _select_strategies(state, cfg)
+def _read_position(label):
+    if not sys.stdin.isatty():
+        return None
+    print(label, flush=True)
+    try:
+        return input("  > ").strip() or None
+    except (EOFError, KeyboardInterrupt):
+        return None
+
+
+def _strategies_for(cfg, is_research):
+    strategies = _select_strategies(cfg)
     if is_research:
         must_have = ['falsification', 'adjacent_field', 'alternative_hypothesis']
         missing = [s for s in must_have if s not in strategies and s in STRATEGY_KEYS]
@@ -746,137 +613,155 @@ def explore(question):
         for s in missing:
             if replaceable:
                 strategies[strategies.index(replaceable.pop())] = s
-    w = state.get('strategy_weights', {})
-    _verbose(f"strategies: {[f'{s}({w.get(s, 1.0):.2f})' for s in strategies]}")
-    responses = _generate_perspectives(question, strategies, cfg)
-    responses = {k: v for k, v in responses.items() if v}
+    return strategies
 
+
+def _run_perspectives(question, cfg, is_research):
+    """Generate, validate, rank for display. Returns (responses, divergences, shown_keys);
+    responses is None on total failure, shown_keys is [] when only the default came back."""
+    print(f"\n  Generating perspectives ({cfg.get('provider')}/{cfg.get('model')})...", flush=True)
+    strategies = _strategies_for(cfg, is_research)
+    _verbose(f"strategies: {strategies}")
+    responses = {k: v for k, v in _generate_perspectives(question, strategies, cfg).items() if v}
     if 'default' not in responses:
         print(f"  Default response failed ({cfg.get('provider')}/{cfg.get('model')}).")
-        print(f"  Run 'prism config' to verify settings.")
-        return
-
+        print("  Run 'prism config' to verify settings.")
+        return None, None, None
     non_default = {k: v for k, v in responses.items() if k != 'default'}
     if not non_default:
         print(f"\n  {'─' * 56}\n  DEFAULT\n  {'─' * 56}")
         _print_wrapped(responses['default'], indent=4)
-        return
-
-    # Rank by divergence
-    divergences = {k: _distance(responses['default'], v) for k, v in non_default.items()}
+        return responses, {}, []
+    divergences = {k: _bow_distance(responses['default'], v) for k, v in non_default.items()}
     shown_keys = sorted(divergences, key=divergences.get, reverse=True)[:cfg.get('num_shown', 3)]
+    return responses, divergences, shown_keys
 
-    # Show
-    print(f"\n  {'─' * 56}")
-    print("  DEFAULT ANSWER")
-    print(f"  {'─' * 56}")
+
+def _show_default_and_perspectives(responses, shown_keys):
+    print(f"\n  {'─' * 56}\n  DEFAULT ANSWER\n  {'─' * 56}")
     _print_wrapped(responses['default'], indent=4)
-
     for i, key in enumerate(shown_keys):
-        s = STRATEGIES.get(key, {})
-        print(f"\n  {'─' * 56}")
-        print(f"  {i+1}. {s.get('name', key).upper()} (distance: {divergences[key]:.3f})")
-        print(f"  {'─' * 56}")
+        name = STRATEGIES.get(key, {}).get('name', key)
+        print(f"\n  {'─' * 56}\n  {i+1}. {name.upper()}\n  {'─' * 56}")
         _print_wrapped(responses[key], indent=4)
 
-    # After: revised position + confidence
+
+def _rebuttal_reply(question, key, perspective, pushback, cfg):
+    user = (f"Question: {question}\n\nYour earlier position:\n{perspective[:400]}\n\n"
+            f"The user pushes back:\n{pushback}\n\n"
+            "Respond once, under 150 words. Concede what is right in the pushback; "
+            "defend only what survives it.")
+    return _llm_call(STRATEGIES[key]['system'], user, cfg)
+
+
+def _rebuttal_round(question, shown_keys, responses, cfg):
+    """One optional follow-up: user rebuts a perspective, that strategy replies once."""
+    if not sys.stdin.isatty() or not shown_keys:
+        return None
     print(f"\n  {'─' * 56}")
-    print("  Same position? Changed? Or a different question entirely:", flush=True)
-    human_after = None
-    if sys.stdin.isatty():
-        try:
-            human_after = input("  > ").strip()
-        except (EOFError, KeyboardInterrupt):
-            pass
-    if not human_after:
-        human_after = None
-    conf_after = _read_confidence() if human_after else None
+    print(f"  Push back on a perspective? (1-{len(shown_keys)} to respond, Enter to skip)")
+    try:
+        choice = input("  > ").strip()
+        if not (choice.isdigit() and 1 <= int(choice) <= len(shown_keys)):
+            return None
+        print("  Your pushback:", flush=True)
+        pushback = input("  > ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+    if not pushback:
+        return None
+    key = shown_keys[int(choice) - 1]
+    reply = _rebuttal_reply(question, key, responses[key], pushback, cfg)
+    name = STRATEGIES.get(key, {}).get('name', key)
+    print(f"\n  {'─' * 56}\n  {name.upper()} RESPONDS\n  {'─' * 56}")
+    _print_wrapped(reply or "(no response)", indent=4)
+    return {'strategy': key, 'text': pushback[:INPUT_TRUNCATION_LIMIT]}
 
-    # Measure
-    shift = _distance(human_before, human_after) if (human_before and human_after) else None
-    direction = _measure_direction(human_before, human_after, responses)
-    independence = _measure_independence(human_after, responses)
-    convergence = _distance(human_after, responses['default']) if human_after else None
-    session_type = _classify_session(conf_before, conf_after, shift, direction,
-                                      human_after, question, before_text=human_before)
 
-    if (human_before and len(human_before) > INPUT_TRUNCATION_LIMIT) or (human_after and len(human_after) > INPUT_TRUNCATION_LIMIT):
-        print("  (Note: response truncated to 500 characters for storage)")
-
-    session = {
+def _build_session(question, pos_before, conv_before, pos_after, conv_after,
+                   self_category, moved_by, session_type, shown_keys, divergences, rebuttal):
+    trunc = INPUT_TRUNCATION_LIMIT
+    wording = _bow_distance(pos_before, pos_after) if pos_before and pos_after else None
+    return {
         'id': hashlib.sha256(str(time.time()).encode()).hexdigest()[:8],
+        'schema': 'v3',
         'timestamp': datetime.now().isoformat(),
         'question': question,
-        'human_before': human_before[:INPUT_TRUNCATION_LIMIT] if human_before else None,
-        'human_after': human_after[:INPUT_TRUNCATION_LIMIT] if human_after else None,
-        'confidence_before': conf_before,
-        'confidence_after': conf_after,
+        'position_before': pos_before[:trunc] if pos_before else None,
+        'position_after': pos_after[:trunc] if pos_after else None,
+        'conviction_before': conv_before,
+        'conviction_after': conv_after,
+        'self_category': self_category,
+        'moved_by': moved_by,
+        'session_type': session_type,
         'strategies_shown': shown_keys,
         'divergences': {k: round(v, 4) for k, v in divergences.items()},
-        'shift': round(shift, 4) if shift is not None else None,
-        'direction': direction,
-        'independence': round(independence, 4) if independence is not None else None,
-        'convergence_score': round(convergence, 4) if convergence is not None else None,
-        'session_type': session_type,
-        'user_rating': None,
-        'measurement': _measurement_method(),
+        'rebuttal': rebuttal,
+        'wording_change': round(wording, 4) if wording is not None else None,
     }
 
-    # Show measurement
-    if human_before and human_after:
-        print(f"\n  {'=' * 56}")
-        print(f"  MEASUREMENT ({_measurement_method()})")
-        print(f"  {'=' * 56}")
 
-        # Session type
-        type_desc = {
-            'reframing': 'You asked a different question — frame shift',
-            'reconceptualization': 'Genuine new thinking — independent direction',
-            'destabilization': 'Productive doubt — confidence shaken',
-            'adoption': 'Moved toward a model response — check if genuine',
-            'shift': 'Some change detected',
-            'unshaken': 'No significant change',
-        }
-        print(f"\n  Session: {session_type}")
-        print(f"  {type_desc.get(session_type, '')}")
+def _print_measurement(session):
+    st = session['session_type']
+    desc = {
+        'reframing': 'You changed the question — frame shift',
+        'destabilization': 'Conviction dropped sharply — productive doubt',
+        'adoption': 'Moved toward a model answer — check if genuine',
+        'switch': 'You flipped your stance',
+        'shift': 'You moved, same side',
+        'unshaken': 'No significant change',
+    }
+    print(f"\n  {'=' * 56}\n  MEASUREMENT\n  {'=' * 56}")
+    print(f"\n  Session: {st}")
+    if desc.get(st):
+        print(f"  {desc[st]}")
+    cb, ca = session['conviction_before'], session['conviction_after']
+    if cb is not None and ca is not None:
+        print(f"  Conviction: {cb} → {ca} ({ca - cb:+d})")
+    if session.get('moved_by'):
+        mb = session['moved_by']
+        name = 'Default answer' if mb == 'default' else STRATEGIES.get(mb, {}).get('name', mb)
+        print(f"  Moved by: {name}")
 
-        if conf_before is not None and conf_after is not None:
-            delta = conf_after - conf_before
-            print(f"  Confidence: {conf_before} → {conf_after} ({delta:+d})")
-        if shift is not None:
-            print(f"  Text shift: {shift:.4f}")
-        if direction != 'unknown':
-            if direction.startswith('toward_'):
-                sname = STRATEGIES.get(direction.replace('toward_', ''), {}).get('name', direction)
-                print(f"  Direction: toward {sname}")
-            else:
-                print(f"  Direction: {direction}")
-        if independence is not None:
-            print(f"  Independence: {independence:.0%}")
 
-    # Feedback
-    rated = None
-    if sys.stdin.isatty() and shown_keys:
-        try:
-            parts = [f"{i+1}={STRATEGIES.get(k, {}).get('name', k)}" for i, k in enumerate(shown_keys)]
-            print(f"\n  Most useful? ({', '.join(parts)}, Enter to skip)")
-            choice = input("  > ").strip()
-            if choice.isdigit() and 1 <= int(choice) <= len(shown_keys):
-                rated = shown_keys[int(choice) - 1]
-                session['user_rating'] = rated
-        except (EOFError, KeyboardInterrupt):
-            pass
+def explore(question):
+    """Position + conviction → perspectives → rebuttal → revised position → classify."""
+    state = _load_state()
+    cfg = _load_config()
+    print(f"\n  PRISM\n  {'=' * 56}\n  {question}\n  {'=' * 56}\n")
 
-    _update_weights(state, shown_keys, rated, session_type, direction)
+    position_before = _read_position("  Your position (before seeing anything):")
+    conviction_before = _read_conviction() if position_before else None
+
+    is_research = os.environ.pop('PRISM_RESEARCH', None)
+    if is_research:
+        cfg = {**cfg, 'max_tokens': 800, 'num_perspectives': 5, 'num_shown': 5}
+    responses, divergences, shown_keys = _run_perspectives(question, cfg, is_research)
+    if responses is None or not shown_keys:
+        return
+
+    _show_default_and_perspectives(responses, shown_keys)
+    rebuttal = _rebuttal_round(question, shown_keys, responses, cfg)
+
+    position_after = _read_position(f"\n  {'─' * 56}\n  Your position now:")
+    conviction_after = _read_conviction("  Conviction now (0-100): ") if position_after else None
+    self_category = _read_self_category() if position_after else None
+    moved_by = _read_moved_by(shown_keys) if position_after else None
+
+    session_type = _classify_session(self_category, conviction_before, conviction_after, moved_by)
+    session = _build_session(question, position_before, conviction_before, position_after,
+                             conviction_after, self_category, moved_by, session_type,
+                             shown_keys, divergences, rebuttal)
+    if session_type != 'unmeasured':
+        _print_measurement(session)
     state.setdefault('sessions', []).append(session)
     _save_state(state)
-
     n = len(state['sessions'])
     if n < 5:
         print(f"\n  Session logged ({n}/5 for first insights).\n")
     else:
         print(f"\n  Session logged. Run 'prism insights' for patterns.\n")
-    _log(f"explore: q='{question[:50]}' type={session_type} conf={conf_before}→{conf_after}")
+    _log(f"explore: q='{question[:50]}' type={session_type} conv={conviction_before}→{conviction_after}")
 
 
 def check(conclusion):
@@ -922,13 +807,11 @@ def check(conclusion):
     state = _load_state()
     session = {
         'id': hashlib.sha256(str(time.time()).encode()).hexdigest()[:8],
+        'schema': 'v3',
         'timestamp': datetime.now().isoformat(),
         'question': conclusion[:INPUT_TRUNCATION_LIMIT],
         'session_type': 'check',
         'strategies_shown': [k for k in CHECK_STRATEGIES if k in results and results[k]],
-        'human_before': None, 'human_after': None,
-        'confidence_before': None, 'confidence_after': None,
-        'shift': None, 'direction': None, 'independence': None,
     }
     state.setdefault('sessions', []).append(session)
     _save_state(state)
@@ -936,25 +819,23 @@ def check(conclusion):
 
 
 def quick(question):
-    state = _load_state()
     cfg = _load_config()
     print(f"\n  PRISM — Quick View\n  {question}\n")
-    strategies = _select_strategies(state, cfg)
+    strategies = _select_strategies(cfg)
     print(f"  Generating ({cfg.get('provider')}/{cfg.get('model')})...", flush=True)
     responses = _generate_perspectives(question, strategies, cfg)
     responses = {k: v for k, v in responses.items() if v}
     if 'default' not in responses:
         print(f"  Failed ({cfg.get('provider')}/{cfg.get('model')}). Run 'prism config' to verify.")
         return
-    divergences = {k: _distance(responses['default'], v)
+    divergences = {k: _bow_distance(responses['default'], v)
                    for k, v in responses.items() if k != 'default'}
     sorted_keys = sorted(divergences, key=divergences.get, reverse=True)
     print(f"\n  {'─' * 56}\n  DEFAULT\n  {'─' * 56}")
     _print_wrapped(responses['default'], indent=4)
     for key in sorted_keys[:cfg.get('num_shown', 3)]:
         s = STRATEGIES.get(key, {})
-        div = f" ({divergences[key]:.3f})" if key in divergences else ""
-        print(f"\n  {'─' * 56}\n  {s.get('name', key).upper()}{div}\n  {'─' * 56}")
+        print(f"\n  {'─' * 56}\n  {s.get('name', key).upper()}\n  {'─' * 56}")
         _print_wrapped(responses[key], indent=4)
     print(f"\n  What do you think?\n")
     _log(f"quick: q='{question[:50]}'")
@@ -974,80 +855,81 @@ def think():
     explore(question)
 
 
+def _insight_categories(sessions):
+    desc = {'reframing': 'changed the question', 'destabilization': 'conviction shaken',
+            'adoption': 'moved toward AI', 'switch': 'flipped stance',
+            'shift': 'moved, same stance', 'unshaken': 'no change', 'unmeasured': 'not measured'}
+    types = Counter(s.get('session_type') for s in sessions if s.get('session_type'))
+    if types:
+        print(f"\n  Session types:")
+        for t, count in types.most_common():
+            print(f"    {t:>16}: {count}  ({desc.get(t, t)})")
+
+
+def _insight_conviction(sessions):
+    pairs = [(s['conviction_before'], s['conviction_after']) for s in sessions
+             if s.get('conviction_before') is not None and s.get('conviction_after') is not None]
+    if not pairs:
+        return
+    avg = sum(a - b for b, a in pairs) / len(pairs)
+    print(f"\n  Conviction change: {avg:+.1f} average ({len(pairs)} measured)")
+    if avg < -5:
+        print("    Prism is creating productive doubt")
+    elif avg > 5:
+        print("    Caution: conviction rising after perspectives")
+
+
+def _insight_adoption(sessions):
+    classified = [s for s in sessions if s.get('session_type') not in (None, 'unmeasured')]
+    recent = classified[-10:]
+    if not recent:
+        return
+    adopted = sum(1 for s in recent
+                  if s.get('moved_by') and s.get('self_category') in ('shifted', 'switched'))
+    rate = adopted / len(recent)
+    print(f"\n  Recent adoption: {rate:.0%} of last {len(recent)} classified sessions")
+    if rate > 0.5:
+        print("    Most recent changes moved toward AI positions — bring outside sources")
+
+
+def _insight_moved(sessions):
+    moved = Counter(s['moved_by'] for s in sessions if s.get('moved_by'))
+    if not moved:
+        return
+    print(f"\n  What moved you:")
+    for key, count in moved.most_common(6):
+        name = 'Default answer' if key == 'default' else STRATEGIES.get(key, {}).get('name', key)
+        print(f"    {name:>16}: {count}")
+
+
+def _insight_revisits(sessions):
+    outcomes = [s['revisit']['outcome'] for s in sessions if s.get('revisit')]
+    if len(outcomes) < 3:
+        return
+    c = Counter(outcomes)
+    decided = c['right'] + c['wrong']
+    rate = f", {c['right']/decided:.0%} right of decided" if decided else ""
+    print(f"\n  Revisits: {len(outcomes)} — {c['right']} right, {c['wrong']} wrong, "
+          f"{c['unclear']} unclear{rate}")
+
+
 def insights():
     state = _load_state()
     sessions = state.get('sessions', [])
+    v3 = [s for s in sessions if s.get('schema') == 'v3']
+    explore3 = [s for s in v3 if s.get('session_type') != 'check']
+    n_legacy = sum(1 for s in sessions if s.get('schema') == 'v2-legacy')
     print(f"\n  PRISM — Insights\n  {'─' * 40}\n  Sessions: {len(sessions)}")
-
-    if len(sessions) < 3:
-        print(f'\n  Need at least 3 sessions.\n  Run: prism "your question"\n')
+    if n_legacy:
+        print(f"  ({n_legacy} legacy v2 sessions excluded from metrics)")
+    if len(explore3) < 3:
+        print(f'\n  Need at least 3 explore sessions.\n  Run: prism "your question"\n')
         return
-
-    # Session type distribution
-    types = Counter(s.get('session_type') for s in sessions if s.get('session_type'))
-    if types:
-        desc = {'reframing': 'frame shift', 'reconceptualization': 'new thinking',
-                'destabilization': 'doubt', 'adoption': 'toward AI',
-                'shift': 'some change', 'unshaken': 'no change'}
-        print(f"\n  Session types:")
-        for t, count in types.most_common():
-            print(f"    {t:>20}: {count}  ({desc.get(t, t)})")
-
-    # Confidence trends
-    pairs = [(s['confidence_before'], s['confidence_after']) for s in sessions
-             if s.get('confidence_before') is not None and s.get('confidence_after') is not None]
-    if pairs:
-        deltas = [a - b for b, a in pairs]
-        avg = sum(deltas) / len(deltas)
-        print(f"\n  Confidence change: {avg:+.1f} average ({len(pairs)} measured)")
-        if avg < -1:
-            print("    Prism is creating productive doubt")
-        elif avg > 1:
-            print("    Caution: confidence rising after perspectives")
-
-    # Strategy effectiveness by deep shift rate
-    if len(sessions) >= 3:
-        strat_types = {}
-        for s in sessions:
-            st = s.get('session_type', '')
-            for key in s.get('strategies_shown', []):
-                strat_types.setdefault(key, []).append(st)
-        if strat_types:
-            print(f"\n  What challenges you (deep shift rate):")
-            ranked = []
-            for key, tl in strat_types.items():
-                deep = sum(1 for t in tl if t in ('reframing', 'reconceptualization', 'destabilization'))
-                ranked.append((key, deep / len(tl) if tl else 0, len(tl)))
-            ranked.sort(key=lambda x: x[1], reverse=True)
-            for key, rate, total in ranked[:6]:
-                name = STRATEGIES.get(key, {}).get('name', key)
-                bar = '#' * int(rate * 20)
-                print(f"    {name:>20}: {rate:.0%} ({total} sessions) |{bar}|")
-
-    # Independence
-    indeps = [s['independence'] for s in sessions if s.get('independence') is not None]
-    if indeps:
-        print(f"\n  Independence: {sum(indeps)/len(indeps):.0%} average")
-
-    # Convergence
-    conv = [s['convergence_score'] for s in sessions if s.get('convergence_score') is not None]
-    if len(conv) >= 5:
-        recent = conv[-20:]
-        nr = len(recent)
-        xm = (nr - 1) / 2
-        ym = sum(recent) / nr
-        num = sum((i - xm) * (s - ym) for i, s in enumerate(recent))
-        den = sum((i - xm) ** 2 for i in range(nr))
-        slope = num / den if den > 0 else 0
-        caveat = "  (low sample size)" if nr < 10 else ""
-        print(f"\n  Convergence (last {nr} sessions):{caveat}")
-        if slope < -0.01:
-            print(f"    CONVERGING (slope: {slope:.4f}) — moving toward AI defaults")
-        elif slope > 0.01:
-            print(f"    DIVERGING (slope: {slope:.4f}) — increasingly independent")
-        else:
-            print(f"    STABLE (slope: {slope:.4f})")
-
+    _insight_categories(explore3)
+    _insight_conviction(explore3)
+    _insight_adoption(explore3)
+    _insight_moved(explore3)
+    _insight_revisits(v3)
     print()
 
 
@@ -1059,15 +941,52 @@ def history(count=10):
         print('  No sessions yet.\n')
         return
     for s in sessions[-count:]:
-        cb, ca = s.get('confidence_before'), s.get('confidence_after')
-        if cb is not None and ca is not None:
-            conf = f"{cb}→{ca}"
-        else:
-            sh = s.get('shift')
-            conf = f"{sh:.2f}" if sh is not None else " -  "
-        stype = (s.get('session_type') or s.get('shift_label') or '')[:14]
-        print(f"  [{conf:>5}] {stype:>14} | {s['question'][:35]}")
+        cb = s.get('conviction_before', s.get('confidence_before'))
+        ca = s.get('conviction_after', s.get('confidence_after'))
+        conv = f"{cb}→{ca}" if cb is not None and ca is not None else "-"
+        stype = (s.get('session_type') or '')[:14]
+        print(f"  [{conv:>7}] {stype:>14} | {s['question'][:35]}")
     print()
+
+
+def _revisit_candidate(sessions):
+    for s in sessions:
+        if s.get('session_type') == 'check' or 'revisit' in s:
+            continue
+        if s.get('position_after') or s.get('human_after'):
+            return s
+    return None
+
+
+def revisit():
+    state = _load_state()
+    s = _revisit_candidate(state.get('sessions', []))
+    if not s:
+        print("\n  Nothing to revisit yet.\n")
+        return
+    cb = s.get('conviction_before', s.get('confidence_before'))
+    ca = s.get('conviction_after', s.get('confidence_after'))
+    print(f"\n  PRISM — Revisit\n  {'─' * 56}")
+    print(f"  {(s.get('timestamp') or '')[:10]} | {s['question']}")
+    print(f"  Before: {s.get('position_before') or s.get('human_before') or '(none)'}  (conviction {cb})")
+    print(f"  After:  {s.get('position_after') or s.get('human_after') or '(none)'}  (conviction {ca})")
+    if not sys.stdin.isatty():
+        return
+    try:
+        print("\n  Looking back: was your revised position right? (y/n/unclear)")
+        ans = input("  > ").strip().lower()
+        note = input("  Note (Enter to skip):\n  > ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return
+    outcome = {'y': 'right', 'yes': 'right', 'n': 'wrong', 'no': 'wrong',
+               'u': 'unclear', 'unclear': 'unclear'}.get(ans)
+    if not outcome:
+        print("  Skipped.\n")
+        return
+    s['revisit'] = {'timestamp': datetime.now().isoformat(),
+                    'outcome': outcome, 'note': note[:INPUT_TRUNCATION_LIMIT] or None}
+    _save_state(state)
+    print(f"  Logged: {outcome}.\n")
 
 
 def config_cmd(args):
@@ -1082,16 +1001,13 @@ def config_cmd(args):
         print(f"\n  Set: prism config <key> <value>")
         print(f"  Global: {CONFIG_DIR / 'config.json'}")
         print(f"  Project: .prism.json\n")
-        w = _load_state().get('strategy_weights', {})
         mode = merged.get('strategies', 'auto')
         print(f"  Strategies ({mode} mode):")
         for k in STRATEGY_KEYS:
             ev = STRATEGIES[k].get('evidence', '')
             ev_str = f"  [{ev[:40]}]" if ev else ""
-            print(f"    {k:>22} ({STRATEGIES[k]['name']}) w={w.get(k, 1.0):.2f}{ev_str}")
-        print(f"\n  Measurement: {_measurement_method()}")
-        if _measurement_method() == 'lexical':
-            print("  pip install sentence-transformers for semantic\n")
+            print(f"    {k:>22} ({STRATEGIES[k]['name']}){ev_str}")
+        print()
         return
     key = args[0]
     if len(args) < 2:
@@ -1142,11 +1058,11 @@ def config_cmd(args):
         proj = {}
         if proj_file.exists():
             try:
-                proj = json.loads(proj_file.read_text())
-            except (json.JSONDecodeError, OSError):
+                proj = json.loads(proj_file.read_text(encoding='utf-8'))
+            except (json.JSONDecodeError, OSError, ValueError):
                 pass
         proj[key] = val
-        proj_file.write_text(json.dumps(proj, indent=2))
+        proj_file.write_text(json.dumps(proj, indent=2), encoding='utf-8')
         print(f"  {key} = {val}  (project: {proj_file})")
     else:
         global_cfg[key] = val
@@ -1194,9 +1110,8 @@ def _print_wrapped(text, indent=4, width=76):
 # ============================================================
 
 def get_perspectives(question: str, n: int | None = None) -> dict:
-    state = _load_state()
     cfg = _load_config()
-    strategies = _select_strategies(state, cfg)
+    strategies = _select_strategies(cfg)
     if n is not None:
         strategies = strategies[:n]
     responses = _generate_perspectives(question, strategies, cfg, quiet=True)
@@ -1210,7 +1125,7 @@ def get_perspectives(question: str, n: int | None = None) -> dict:
                 'strategy': key,
                 'name': STRATEGIES.get(key, {}).get('name', key),
                 'text': responses[key],
-                'divergence': round(_distance(responses['default'], responses[key]), 4),
+                'divergence': round(_bow_distance(responses['default'], responses[key]), 4),
             })
     result['perspectives'].sort(key=lambda x: x['divergence'], reverse=True)
     return result
@@ -1251,524 +1166,70 @@ def get_check(conclusion: str) -> dict:
 # INTEGRATION SETUP
 # ============================================================
 
-_DETECT = {
-    'claude': Path.home() / '.claude',
-    'cursor': Path.home() / '.cursor',
-    'codex': Path.home() / '.codex',
-    'windsurf': Path.home() / '.windsurf',
-    'kiro': Path.home() / '.kiro',
-    'gemini': Path.home() / '.gemini',
-    'augment': Path.home() / '.augment',
-    'copilot': Path.home() / '.config' / 'github-copilot',
-}
+# Prism does not write into other tools' internal config. Integration lives as
+# committed files: the Claude Code plugin marketplace (.claude-plugin/) and the
+# Agent Skills SKILL.md standard (skills/). Static files survive tool updates;
+# mimicking a tool's undocumented cache format does not. See README.
+
+_MARKETPLACE_REPO = 'kirti34n/prism'
+
+_CLAUDE_STEPS = f"""
+  Claude Code — add Prism as a plugin (survives updates, no file injection):
+
+    /plugin marketplace add {_MARKETPLACE_REPO}
+    /plugin install prism@prism
+
+  Gives you /prism, /prism-check, and the auto-suggest skill.
+"""
+
+_SKILLS_STEPS = """
+  Cursor, Copilot, Gemini CLI, Codex and other Agent-Skills tools:
+
+    Point your tool at this repo's skills/ folder (the SKILL.md standard),
+    or copy skills/prism into your tool's skills directory.
+    See the README "AI-tool integration" section for per-tool paths.
+"""
 
 
 def setup(platform):
-    """Set up integration with AI coding tools."""
-    prism_path = os.path.realpath(__file__)
-
-    platforms = {
-        'install': lambda: _setup_install(prism_path),
-        'claude': _setup_claude_code,
-        'claude-code': _setup_claude_code,
-        'codex': lambda: _setup_tool('codex'),
-        'cursor': lambda: _setup_tool('cursor'),
-        'copilot': lambda: _setup_tool('copilot'),
-        'windsurf': lambda: _setup_tool('windsurf'),
-        'kiro': lambda: _setup_tool('kiro'),
-        'gemini': lambda: _setup_tool('gemini'),
-        'augment': lambda: _setup_tool('augment'),
-    }
-
-    if platform in platforms:
-        platforms[platform]()
+    """Print the standards-based integration steps (Prism no longer injects
+    files into other tools — see README for why)."""
+    if platform == 'install':
+        _setup_install()
+    elif platform in ('claude', 'claude-code'):
+        print(_CLAUDE_STEPS)
     elif platform == 'all':
-        for name, fn in platforms.items():
-            if name not in ('install', 'claude-code'):
-                fn()
-        print(f"\n  All integrations installed.\n")
-    elif not platform:
-        # Auto-detect installed tools (interactive only)
-        if not sys.stdin.isatty():
-            _setup_help()
-            return
-        detected = [n for n, p in _DETECT.items() if p.exists()]
-        if not detected:
-            _setup_help()
-            return
-        print(f"\n  PRISM — Setup")
-        print(f"  {'─' * 30}")
-        print(f"  Detected tools:")
-        for name in detected:
-            print(f"    ✓ {name.title()}")
-        print()
-        try:
-            choice = input("  Set up all detected tools? (y/n): ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            choice = 'n'
-        if choice in ('y', 'yes'):
-            for name in detected:
-                if name in platforms:
-                    platforms[name]()
-            print(f"\n  Done.\n")
-        else:
-            print(f"  Cancelled.\n")
+        print(_CLAUDE_STEPS)
+        print(_SKILLS_STEPS)
+    elif platform in ('cursor', 'codex', 'copilot', 'windsurf', 'kiro', 'gemini', 'augment'):
+        print(_SKILLS_STEPS)
     else:
         _setup_help()
 
 
 def _setup_help():
-    print(f"\n  PRISM — Setup")
-    print(f"  {'─' * 40}")
-    print(f"  prism setup install    # make 'prism' available globally")
-    print(f"  prism setup claude     # Claude Code (/prism, /prism-check)")
-    print(f"  prism setup codex      # Codex CLI")
-    print(f"  prism setup cursor     # Cursor")
-    print(f"  prism setup copilot    # GitHub Copilot")
-    print(f"  prism setup windsurf   # Windsurf")
-    print(f"  prism setup kiro       # Kiro")
-    print(f"  prism setup gemini     # Gemini CLI")
-    print(f"  prism setup augment    # Augment Code")
-    print(f"  prism setup all        # all of the above\n")
+    print(f"\n  PRISM — Setup\n  {'─' * 40}")
+    print("  prism setup install    # how to install the 'prism' command")
+    print("  prism setup claude     # Claude Code plugin (/prism, /prism-check)")
+    print("  prism setup all        # every AI-tool integration path\n")
 
 
-def _setup_install(prism_path):
-    """Make 'prism' available as a system command."""
+def _setup_install():
+    """Tell the user the right install command for their machine. No symlinks:
+    the PyPI console-script entry point works cross-platform, Windows included."""
     import shutil
-    existing = shutil.which('prism')
-    resolved = os.path.realpath(existing) if existing else ''
-
-    # If already installed via pip/pipx, skip symlink
-    if existing and ('pipx' in resolved or 'site-packages' in resolved):
-        print(f"\n  Already installed via pip/pipx: {existing}")
+    if shutil.which('prism'):
+        print("\n  'prism' is already on PATH. You're set.\n")
         return
-
-    bin_dir = Path.home() / '.local' / 'bin'
-    bin_dir.mkdir(parents=True, exist_ok=True)
-    link = bin_dir / 'prism'
-
-    # Make executable
-    os.chmod(prism_path, os.stat(prism_path).st_mode | 0o755)
-
-    # Create symlink
-    if link.exists() or link.is_symlink():
-        link.unlink()
-    link.symlink_to(prism_path)
-
-    # Check PATH
-    on_path = str(bin_dir) in os.environ.get('PATH', '').split(':')
-
-    print(f"\n  Installed: {link} -> {prism_path}")
-    if on_path:
-        print(f"  'prism' is on PATH. Ready to use.")
+    print("\n  Install Prism as a global command:\n")
+    if shutil.which('pipx'):
+        print("    pipx install prism-think")
+    elif shutil.which('uv'):
+        print("    uv tool install prism-think")
     else:
-        print(f"\n  Add to ~/.bashrc or ~/.zshrc:")
-        print(f'    export PATH="$PATH:{bin_dir}"')
-        print(f"  Then: source ~/.bashrc")
-
-
-# ---- Embedded Claude Code skill content (no external files needed) ----
-
-_SKILL_PRISM = """\
----
-name: prism
-description: Generate divergent perspectives on a question using research-backed cognitive strategies. Reveals how AI shapes your thinking.
-argument-hint: <question or topic>
----
-
-# Prism — Divergent Perspectives
-
-Generate structurally different perspectives using 10 research-backed cognitive strategies.
-
-## When to use
-
-- User asks for perspectives, different angles, challenges thinking, says "prism"
-- User is making a decision or evaluating approaches
-- User wants to stress-test a technical approach
-
-## How to run
-
-**Path 1 — CLI available:** Run `prism json "$ARGUMENTS"`, parse the JSON output. It includes divergence scores and tracking. Present using the format in Step 4.
-
-**Path 2 — No CLI:** Generate natively using the steps below.
-
-### Step 1: Default Answer
-
-Give the most practical, specific answer to the question. 3-4 sentences. Name specific technologies, approaches, or steps — not vague principles.
-
-### Step 2: Generate 3 Perspectives
-
-Pick 3 strategies from the table below. Each MUST follow its structural constraint exactly. Do NOT hedge or qualify — commit fully to the perspective.
-
-| Strategy | Constraint |
-|----------|-----------|
-| Devil's Advocate | Argue AGAINST the common position. No hedging. Real failure examples. |
-| Pre-Mortem | 18 months from now, this failed. Write the post-mortem. Specific failure modes. |
-| Falsification | Design the exact test that would disprove this. Metric, threshold, timeframe. |
-| Blind Spot | ONE hidden assumption that changes the entire framing. The mechanism that hides it. |
-| Alt Hypothesis | 3 structurally different explanations. Core insight, scenario where it wins, distinguishing test. |
-| First Principles | List 2-3 "everyone knows" assumptions. Show where each breaks. Rebuild without them. |
-| Inversion | Answer the exact opposite question in detail. What does the inversion reveal? |
-| Systems | Only 2nd/3rd order effects. Follow causal chains 3 steps. Name feedback loops. |
-| Stakeholder | Who gets harmed? Tell the story from their perspective. Make the friction concrete. |
-| Adjacent Field | Pick a specific field that solved an analogous problem. Map their technique onto this. |
-
-### Step 3: Rank by Divergence
-
-Order perspectives by how different each is from the default. Most divergent first.
-
-### Step 4: Present
-
-**Default Answer**
-[the default — 3-4 sentences]
-
----
-
-**Divergent Perspectives**
-
-**1. [Strategy Name]**
-[Full perspective text — 4-8 sentences minimum]
-
-**2. [Strategy Name]**
-[Full perspective text]
-
-**3. [Strategy Name]**
-[Full perspective text]
-
----
-
-*Do any of these shift how you're thinking about this?*
-
-## Important
-
-Do NOT paraphrase, shorten, or editorialize perspectives. The value is in the specifics, examples, and concrete details. Each perspective should commit fully to its position — no "on the other hand" hedging. If a perspective names specific technologies, failure modes, or examples, keep them all.
-"""
-
-_SKILL_CHECK = """\
----
-name: prism-check
-description: Challenge a conclusion before committing to it. Generates Pre-Mortem, Alt Hypothesis, Falsification, and Blind Spot challenges.
-argument-hint: <conclusion to challenge>
----
-
-# Prism Check — Challenge a Conclusion
-
-Stress-test a conclusion using 4 research-backed strategies before committing to it.
-
-## When to use
-
-- User wants to challenge or stress-test a conclusion
-- User says "check this", "challenge this", "is this right", "prism check"
-- User is about to commit to a technical decision based on AI advice
-- User has a claim or assumption they want tested
-
-## How to run
-
-**Path 1 — CLI available:** Run `prism json --check "$ARGUMENTS"`, parse JSON, present results.
-
-**Path 2 — No CLI:** Generate all 4 challenges below natively.
-
-### Generate 4 Challenges
-
-Apply ALL of these to the conclusion:
-
-**Pre-Mortem** — It is 18 months from now. This approach was pursued and FAILED. The failure was predictable in hindsight. Write the post-mortem: the specific failure mode, the early warning signs that were rationalized away, the moment the team should have pivoted. Be brutally concrete.
-
-**Alt Hypothesis** — Name 3 genuinely different explanations or approaches. Not variations on a theme — structurally different mechanisms. For each: (a) the core insight that makes it work, (b) one scenario where it outperforms the conclusion, (c) the test that distinguishes them.
-
-**Falsification** — Design the exact test that would DISPROVE this. Name the specific metric, threshold, and scenario. If no test can disprove it, explain why that's a red flag.
-
-**Blind Spot** — Identify exactly ONE hidden assumption that changes the entire framing. Not a minor detail — a structural blind spot that, once seen, makes the conclusion look naive. Explain the mechanism that keeps people from seeing it.
-
-### Present
-
-For each challenge:
-1. **Strategy name** in bold
-2. The full challenge (4-8 sentences minimum — commit fully, no hedging)
-
-End with: *"Does the original conclusion still hold?"*
-
-## Important
-
-Do NOT soften or balance challenges. The entire point is to stress-test. Each challenge should make the user uncomfortable with the conclusion — that's the signal it's working.
-"""
-
-_SKILL_AUTO = """\
----
-name: prism-auto
-description: Automatically add diverse perspectives when user is making decisions, evaluating approaches, or asking should-I questions
-user-invocable: false
----
-
-# Prism Auto — Lightweight Perspective Nudges
-
-When you detect the user is making a decision or evaluating approaches, add 2 brief divergent perspectives inline.
-
-## When to trigger
-
-- "should we/I...", "which approach...", "is it better to..."
-- Evaluating trade-offs between options
-- About to commit to an architecture or approach
-
-Do NOT trigger on simple factual questions, implementation requests, or when the user is asking for help with something already decided.
-
-## How to generate
-
-Pick 2 strategies from: Devil's Advocate, Pre-Mortem, Blind Spot, First Principles, Inversion, Systems.
-
-For each, write 2-3 sentences that commit fully to that perspective. No hedging.
-
-## How to present
-
-After your normal response, add:
-
----
-
-**Prism perspectives:**
-- **[Strategy]:** [2-3 sentence perspective]
-- **[Strategy]:** [2-3 sentence perspective]
-
-*Run /prism for the full experience with more perspectives.*
-
----
-
-Keep it lightweight. This is a nudge, not the full Prism flow.
-"""
-
-
-def _setup_claude_code():
-    """Generate and install Prism as a Claude Code plugin (works from any install method)."""
-    claude_dir = Path.home() / '.claude'
-    claude_dir.mkdir(parents=True, exist_ok=True)
-
-    # --- 1. Register in settings.json ---
-    settings_path = claude_dir / 'settings.json'
-    settings = {}
-    if settings_path.exists():
-        try:
-            settings = json.loads(settings_path.read_text())
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    if 'extraKnownMarketplaces' not in settings:
-        settings['extraKnownMarketplaces'] = {}
-    settings['extraKnownMarketplaces']['prism-skill'] = {
-        'source': {'source': 'github', 'repo': 'kirti34n/prism'}
-    }
-    if 'enabledPlugins' not in settings:
-        settings['enabledPlugins'] = {}
-    settings['enabledPlugins']['prism@prism-skill'] = True
-    settings_path.write_text(json.dumps(settings, indent=2) + '\n')
-
-    # --- 2. Generate plugin files in cache ---
-    cache_dir = claude_dir / 'plugins' / 'cache' / 'prism-skill' / 'prism' / __version__
-    files = {
-        '.claude-plugin/plugin.json': json.dumps({
-            'name': 'prism', 'version': __version__,
-            'description': 'See how AI changes your thinking. Generate divergent '
-                           'perspectives or challenge conclusions before committing.',
-            'author': {'name': 'keerti'},
-            'skills': ['./.claude/skills/prism', './.claude/skills/prism-check',
-                       './.claude/skills/prism-auto'],
-        }, indent=2),
-        '.claude-plugin/marketplace.json': json.dumps({
-            'name': 'prism-skill', 'id': 'prism-skill',
-            'owner': {'name': 'keerti'},
-            'plugins': [{'name': 'prism', 'source': './', 'version': __version__,
-                         'description': 'Divergent perspectives and conclusion challenges '
-                                        'using research-backed cognitive strategies.',
-                         'category': 'thinking'}],
-        }, indent=2),
-        '.claude/skills/prism/SKILL.md': _SKILL_PRISM,
-        '.claude/skills/prism-check/SKILL.md': _SKILL_CHECK,
-        '.claude/skills/prism-auto/SKILL.md': _SKILL_AUTO,
-    }
-    for rel_path, content in files.items():
-        full = cache_dir / rel_path
-        full.parent.mkdir(parents=True, exist_ok=True)
-        full.write_text(content)
-
-    # --- 3. Register in installed_plugins.json ---
-    plugins_dir = claude_dir / 'plugins'
-    plugins_dir.mkdir(parents=True, exist_ok=True)
-    installed_path = plugins_dir / 'installed_plugins.json'
-    installed = {'version': 2, 'plugins': {}}
-    if installed_path.exists():
-        try:
-            installed = json.loads(installed_path.read_text())
-        except (json.JSONDecodeError, OSError):
-            pass
-
-    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000Z')
-    installed.setdefault('plugins', {})['prism@prism-skill'] = [{
-        'scope': 'user', 'installPath': str(cache_dir),
-        'version': __version__, 'installedAt': now, 'lastUpdated': now,
-    }]
-    installed_path.write_text(json.dumps(installed, indent=2) + '\n')
-
-    # --- 4. Clean up old command files ---
-    cmd_dir = claude_dir / 'commands'
-    for old in ('prism.md', 'prism-check.md'):
-        old_file = cmd_dir / old
-        if old_file.exists():
-            old_file.unlink()
-
-    print(f"\n  Claude Code plugin installed (works with or without CLI):")
-    print(f"    /prism <question>          — divergent perspectives")
-    print(f"    /prism-check <conclusion>  — challenge a conclusion")
-    print(f"    prism-auto                 — auto-triggers on decision questions")
-    print(f"\n  Restart Claude Code to activate.")
-
-
-def _ask_scope():
-    """Ask user to choose global or project scope."""
-    if not sys.stdin.isatty():
-        return 'project'
-    print(f"\n  Where should Prism be available?")
-    print(f"    1. This project only")
-    print(f"    2. All projects (global)")
-    try:
-        choice = input("  Choose (1/2): ").strip()
-    except (EOFError, KeyboardInterrupt):
-        choice = '1'
-    return 'global' if choice == '2' else 'project'
-
-
-def _generate_instruction_content():
-    """Self-contained Prism methodology for AI tool instruction files."""
-    return """\
-## Prism — Divergent Perspectives
-
-When the user asks for perspectives, different angles, challenges thinking, says "prism", or is making a decision/evaluating approaches:
-
-### CLI Fallback
-
-If `prism` CLI is available: run `prism json "question"` (or `prism json --check "conclusion"` for challenges). Parse and present the JSON output — it includes divergence scores and tracking.
-
-Otherwise, generate natively using the instructions below.
-
-### Perspectives Mode
-
-1. **Default answer** — most practical, specific answer (3-4 sentences). Concrete technologies/approaches, not vague principles.
-2. **3 perspectives** — pick 3 strategies from the table. Follow each constraint EXACTLY. No hedging — commit fully.
-3. **Rank** by how different each is from the default. Most divergent first.
-4. **Present:**
-
-**Default Answer**
-[3-4 sentences]
-
----
-**Divergent Perspectives**
-
-**1. [Strategy]** — [full perspective, 4-8 sentences]
-**2. [Strategy]** — [full perspective]
-**3. [Strategy]** — [full perspective]
-
-*Do any of these shift how you're thinking about this?*
-
-### Check Mode (challenge a conclusion)
-
-Apply all 4: Pre-Mortem, Alt Hypothesis, Falsification, Blind Spot (see table for constraints). Present each as a bold heading + 4-8 sentence challenge. End with: *"Does the original conclusion still hold?"*
-
-### Strategies
-
-| Strategy | Constraint |
-|----------|-----------|
-| Devil's Advocate | Argue AGAINST the common position. No hedging. Real failure examples. |
-| Pre-Mortem | 18 months from now, this failed. Write the post-mortem. Specific failure modes. |
-| Falsification | Design the exact test that would disprove this. Metric, threshold, timeframe. |
-| Blind Spot | ONE hidden assumption that changes the entire framing. The mechanism that hides it. |
-| Alt Hypothesis | 3 structurally different explanations. Core insight, scenario where it wins, distinguishing test. |
-| First Principles | List 2-3 "everyone knows" assumptions. Show where each breaks. Rebuild without them. |
-| Inversion | Answer the exact opposite question in detail. What does the inversion reveal? |
-| Systems | Only 2nd/3rd order effects. Follow causal chains 3 steps. Name feedback loops. |
-| Stakeholder | Who gets harmed? Tell the story from their perspective. Make the friction concrete. |
-| Adjacent Field | Pick a specific field that solved an analogous problem. Map their technique onto this. |
-
-**Important:** Do NOT paraphrase or compress. The value is in specifics. Each perspective: 4-8 sentences minimum.
-"""
-
-
-_TOOL_CONFIGS = {
-    'codex': {
-        'format': 'append',
-        'paths': {'project': lambda: Path.cwd() / 'AGENTS.md'},
-    },
-    'cursor': {
-        'format': 'standalone',
-        'frontmatter': ('---\n'
-                        'description: Generate divergent perspectives when evaluating decisions or approaches\n'
-                        'globs:\n'
-                        'alwaysApply: false\n'
-                        '---\n\n'),
-        'paths': {
-            'global': lambda: Path.home() / '.cursor' / 'rules' / 'prism.mdc',
-            'project': lambda: Path.cwd() / '.cursor' / 'rules' / 'prism.mdc',
-        },
-    },
-    'copilot': {
-        'format': 'append',
-        'paths': {'project': lambda: Path.cwd() / '.github' / 'copilot-instructions.md'},
-    },
-    'windsurf': {
-        'format': 'standalone',
-        'frontmatter': '---\ntrigger: model_decision\n---\n\n',
-        'paths': {
-            'global': lambda: Path.home() / '.windsurf' / 'rules' / 'prism.md',
-            'project': lambda: Path.cwd() / '.windsurf' / 'rules' / 'prism.md',
-        },
-    },
-    'kiro': {
-        'format': 'standalone',
-        'frontmatter': '---\ninclusion: auto\n---\n\n',
-        'paths': {
-            'global': lambda: Path.home() / '.kiro' / 'steering' / 'prism.md',
-            'project': lambda: Path.cwd() / '.kiro' / 'steering' / 'prism.md',
-        },
-    },
-    'gemini': {
-        'format': 'append',
-        'paths': {'project': lambda: Path.cwd() / 'GEMINI.md'},
-    },
-    'augment': {
-        'format': 'standalone',
-        'frontmatter': '',
-        'paths': {'global': lambda: Path.home() / '.augment' / 'rules' / 'prism.md'},
-    },
-}
-
-
-def _setup_tool(name):
-    """Set up Prism for a specific AI tool."""
-    cfg = _TOOL_CONFIGS[name]
-    paths = cfg['paths']
-
-    if len(paths) > 1:
-        scope = _ask_scope()
-    else:
-        scope = next(iter(paths))
-
-    f = paths[scope]()
-    f.parent.mkdir(parents=True, exist_ok=True)
-    content = _generate_instruction_content()
-
-    if cfg['format'] == 'standalone':
-        full = cfg.get('frontmatter', '') + content
-        if f.exists() and 'Prism' in f.read_text():
-            print(f"  {name.title()}: already configured in {f}")
-            return
-        f.write_text(full)
-        print(f"  {name.title()}: created {f}  ({scope})")
-    else:
-        if f.exists():
-            existing = f.read_text()
-            if 'Prism' in existing:
-                print(f"  {name.title()}: already configured in {f}")
-                return
-            f.write_text(existing.rstrip() + '\n\n' + content)
-        else:
-            f.write_text(content)
-        print(f"  {name.title()}: added Prism to {f}  ({scope})")
+        print("    pipx install prism-think          # recommended (pip install pipx first)")
+        print("    pip install --user prism-think    # fallback")
+    print()
 
 
 # ============================================================
@@ -1814,6 +1275,8 @@ def _main():
         think()
     elif cmd == 'insights':
         insights()
+    elif cmd == 'revisit':
+        revisit()
     elif cmd == 'history':
         history(int(args[2]) if len(args) > 2 and args[2].isdigit() else 10)
     elif cmd == 'config':
@@ -1842,4 +1305,7 @@ def _main():
 
 
 if __name__ == '__main__':
-    _main()
+    try:
+        _main()
+    except KeyboardInterrupt:
+        sys.exit(130)
