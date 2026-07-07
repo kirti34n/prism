@@ -1,9 +1,13 @@
 name: publish
 
-# Publishes prism-think to PyPI when you push a version tag, e.g. `git tag v3.0.0 && git push --tags`.
+# Publishes prism-think to PyPI when you push a version tag, e.g. `git tag v3.1.0 && git push --tags`.
 # Uses PyPI Trusted Publishing (OIDC), so no API token is stored in the repo.
-# One-time setup: on PyPI, add a trusted publisher for project "prism-think" pointing at
-# owner kirti34n, repo prism, workflow "publish.yml".
+# One-time setup, in order:
+#   1. On PyPI, add a trusted publisher for project "prism-think" pointing at
+#      owner kirti34n, repo prism, workflow "publish.yml".
+#   2. Arm this workflow: `gh variable set PYPI_READY --repo kirti34n/prism --body true`.
+# Until PYPI_READY is "true" the publish job is skipped, so tagging never fires a
+# publish that would fail for lack of credentials.
 
 on:
   push:
@@ -11,6 +15,7 @@ on:
 
 jobs:
   publish:
+    if: ${{ vars.PYPI_READY == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write   # required for PyPI trusted publishing (no stored token)
@@ -25,3 +30,6 @@ jobs:
           python -m build
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A version already on PyPI (e.g. re-tagging) is skipped, not a hard failure.
+          skip-existing: true

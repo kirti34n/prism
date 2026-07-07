@@ -5,22 +5,31 @@ checklist so you never have to remember the details.
 
 ## One-time setup (about five minutes, do this once)
 
-Set up a PyPI Trusted Publisher so the release workflow can publish without any stored
-token or password.
+`prism-think` 3.0.0 was published once by hand to bootstrap the project. To let the
+workflow publish every future version without a stored token, do these two steps once.
+
+**Step 1: add a PyPI Trusted Publisher.**
 
 1. Sign in at [pypi.org](https://pypi.org).
-2. Go to your account, then "Publishing", then "Add a pending publisher"
-   (this works even though `prism-think` does not exist on PyPI yet).
-3. Fill in exactly:
-   - **PyPI project name:** `prism-think`
+2. Open the project's publishing settings:
+   `https://pypi.org/manage/project/prism-think/settings/publishing/`.
+3. Under "Add a new publisher", fill in exactly:
    - **Owner:** `kirti34n`
    - **Repository name:** `prism`
    - **Workflow name:** `publish.yml`
    - **Environment:** leave blank
-4. Save. That is it. No token gets stored anywhere.
+4. Save. No token gets stored anywhere; the workflow proves its identity over OIDC.
 
-The workflow at `.github/workflows/publish.yml` uses OIDC, so GitHub proves its identity
-to PyPI at publish time. Nothing secret lives in the repo.
+**Step 2: arm the workflow.**
+
+The publish job is gated on a repository variable so it can never fire before the
+publisher above exists. Turn it on once:
+
+```bash
+gh variable set PYPI_READY --repo kirti34n/prism --body true
+```
+
+That is it. From now on, pushing a version tag publishes automatically.
 
 ## Cutting a release
 
