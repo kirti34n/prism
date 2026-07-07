@@ -7,10 +7,10 @@
 Record what you thought *before* and *after* consulting an AI, get evidence-based
 counterarguments to the AI's default answer, and watch your own trajectory over time.
 
+[![tests](https://github.com/kirti34n/prism/actions/workflows/test.yml/badge.svg)](https://github.com/kirti34n/prism/actions/workflows/test.yml)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen.svg)](#-install)
-[![Tests](https://img.shields.io/badge/tests-52%20passing-brightgreen.svg)](test_prism.py)
 
 </div>
 

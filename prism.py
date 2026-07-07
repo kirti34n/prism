@@ -1243,7 +1243,18 @@ def _setup_install():
 # MAIN
 # ============================================================
 
+def _force_utf8_output():
+    # The box-drawing dividers crash on a legacy Windows console (cp1252). Switch
+    # stdout/stderr to UTF-8 so the CLI renders everywhere; harmless if already UTF-8.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8')
+        except (AttributeError, ValueError):
+            pass
+
+
 def _main():
+    _force_utf8_output()
     args = sys.argv
     # Extract --verbose/-v flag
     verbose = '--verbose' in args or '-v' in args

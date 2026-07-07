@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "A decision journal for the AI era - record your thinking before and after consulting an AI, and get evidence-based counterarguments."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 authors = [
     { name = "keerti" },
 ]
@@ -20,7 +20,6 @@ classifiers = [
     "Intended Audience :: Education",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",

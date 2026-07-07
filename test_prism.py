@@ -321,6 +321,13 @@ class TestBuildOllama(unittest.TestCase):
         self.assertIs(self._body('deepseek-r1:7b')['think'], False)
 
 
+class TestForceUtf8(unittest.TestCase):
+    def test_noop_when_stream_has_no_reconfigure(self):
+        # StringIO has no .reconfigure, so the call must be swallowed, not raised
+        with mock.patch('sys.stdout', io.StringIO()), mock.patch('sys.stderr', io.StringIO()):
+            prism._force_utf8_output()  # must not raise
+
+
 class TestLog(unittest.TestCase):
     def test_handles_non_ascii(self):
         tmp = Path(tempfile.mkdtemp())
