@@ -95,56 +95,85 @@ Stdlib Python 3.8+ and an LLM. That's the whole dependency list.
 
 ## 🎬 A session, start to finish
 
+A real, unedited session run locally against `qwen3.5:4b` through Ollama (long
+model answers trimmed with `[...]` for length; nothing reworded):
+
 ```text
-$ prism "Should we use REST or GraphQL for our API?"
+$ prism "Should our 4-person team adopt Kubernetes now?"
 
   PRISM
   ========================================================
-  Should we use REST or GraphQL for our API?
+  Should our 4-person team adopt Kubernetes now?
   ========================================================
 
   Your position (before seeing anything):
-  > REST is simpler and we already know it
-  Conviction (0-100): 80
+  > Yes, Kubernetes is the industry standard and we should learn it early
+  Conviction (0-100): 75
 
-  Generating perspectives (openai/gpt-4.1-mini)...
+  Generating perspectives (ollama/qwen3.5:4b)...
 
-  ──────────────────────────────────────────────────────
+  ────────────────────────────────────────────────────────
   DEFAULT ANSWER
-  ──────────────────────────────────────────────────────
-    Both work; choose REST for simple CRUD, GraphQL when clients
-    need flexible, nested queries over many resources...
+  ────────────────────────────────────────────────────────
+    Based on your team size (4 people) and the current market environment,
+    you should not generally adopt full production-ready Kubernetes at this
+    stage unless you are building a highly distributed microservices
+    architecture that cannot run elsewhere. For most early-to-mid-stage
+    startups or product companies of 4 people, Kubernetes introduces
+    disproportionate operational overhead for its complexity gains. [...]
 
-  ──────────────────────────────────────────────────────
-  1. BLIND SPOT
-  ──────────────────────────────────────────────────────
-    The default assumes "simpler" means simpler for you. It depends
-    on the assumption that your clients' data needs are flat. If your
-    mobile app already makes 6 chained REST calls to render one
-    screen, REST is not the simple option; it has just moved the
-    complexity onto the client, where you can't see it...
+  ────────────────────────────────────────────────────────
+  1. PRE-MORTEM
+  ────────────────────────────────────────────────────────
+    Post-Mortem Report: the K8s adoption failure, 18 months out. Outcome:
+    operational paralysis due to over-engineering; the team cannot ship new
+    features faster than it spends time debugging cluster internals. The
+    failure mode was treating K8s as the only viable path to "enterprise
+    readiness," ignoring their constraints as a hyper-lean startup with no
+    dedicated SRE. [...]
 
-  ──────────────────────────────────────────────────────
+  ────────────────────────────────────────────────────────
+  2. INVERSION
+  ────────────────────────────────────────────────────────
+    The opposite answer, a recipe for guaranteed failure: deploy without an
+    internal ops team, and split four engineers' time between building
+    features, debugging cluster crashes, managing node scaling, handling
+    network-policy conflicts, and fighting etcd corruption. That is not
+    "efficiency"; it is distraction on steroids. [...]
+
+  ────────────────────────────────────────────────────────
+  3. ALT HYPOTHESIS
+  ────────────────────────────────────────────────────────
+    Reframe it as an optimization between development velocity and infra
+    cost. Core insight: at four people, the marginal operational safety or
+    scalability K8s buys does not outweigh the opportunity cost of delayed
+    launches and developer context-switching. [...]
+
+  ────────────────────────────────────────────────────────
   Push back on a perspective? (1-3 to respond, Enter to skip)
   > 1
   Your pushback:
-  > our clients are internal services, not mobile apps
+  > but every job posting in our stack asks for Kubernetes experience
 
-  ──────────────────────────────────────────────────────
-  BLIND SPOT RESPONDS
-  ──────────────────────────────────────────────────────
-    Fair, for internal service-to-service calls the chained-call
-    problem is much weaker. The part that still holds: if those
-    services evolve independently, GraphQL's single evolving schema...
+  ────────────────────────────────────────────────────────
+  PRE-MORTEM RESPONDS
+  ────────────────────────────────────────────────────────
+    I concede that adopting Kubernetes now aligns with market expectations
+    and hiring realities. However, the failure mode still holds: premature
+    complexity in an under-resourced environment. The early warning sign was
+    the team spending 30% of sprint time on node scheduling and networking
+    conflicts while delaying feature delivery, and rationalizing it as a
+    "learning curve" rather than a lack of dedicated SRE support for four
+    engineers.
 
-  ──────────────────────────────────────────────────────
+  ────────────────────────────────────────────────────────
   Your position now:
-  > REST is fine for now, but I want to check our call-chain depth first
-  Conviction now (0-100): 55
+  > Probably not yet; a managed platform covers us until we actually need orchestration
+  Conviction now (0-100): 45
   How did your position change?
   (1=same, 2=shifted, 3=switched sides, 4=different question now, Enter=skip)
   > 2
-  Which moved you most? (0=default, 1=Blind Spot, ..., Enter=none)
+  Which moved you most? (0=default, 1=Pre-Mortem, 2=Inversion, 3=Alt Hypothesis, Enter=none)
   > 1
 
   ========================================================
@@ -153,15 +182,17 @@ $ prism "Should we use REST or GraphQL for our API?"
 
   Session: destabilization
   Conviction dropped sharply, productive doubt
-  Conviction: 80 → 55 (-25)
-  Moved by: Blind Spot
+  Conviction: 75 → 45 (-30)
+  Moved by: Pre-Mortem
 
-  Session logged. Run 'prism insights' for patterns.
+  Session logged (1/5 for first insights).
 ```
 
-You started at 80/100 on REST. After **arguing with** a perspective you kept your
-lean but dropped to 55 and gave yourself a concrete next action. Prism recorded a
-*destabilization*, because you said so, and your conviction confirms it.
+You started at 75/100 on adopting Kubernetes. You **argued back** at the
+Pre-Mortem, it conceded the hiring point but held its ground on the real risk,
+and you came out at 45 with a concrete next step (a managed platform for now).
+Prism recorded a *destabilization*, because you said so and your conviction
+confirms it.
 
 ---
 
