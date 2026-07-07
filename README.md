@@ -361,8 +361,9 @@ A side project, built in free time, with no plans to make it a product. The scop
 deliberately narrow. Your data stays on your machine (`~/.config/prism/`), and
 upgrading migrates your history automatically. Tests: `python -m unittest test_prism -v`.
 
-Contributions and feedback welcome. See [CHANGELOG.md](CHANGELOG.md) for what's new and
-[LIMITATIONS.md](LIMITATIONS.md) for what the tool honestly does and doesn't do.
+Contributions and feedback welcome. See [CHANGELOG.md](CHANGELOG.md) for what's new,
+[LIMITATIONS.md](LIMITATIONS.md) for what the tool honestly does and doesn't do, and
+[RELEASING.md](RELEASING.md) for how versions are published.
 
 <div align="center">
 <sub>MIT licensed · built to be argued with, not outsourced to</sub>
