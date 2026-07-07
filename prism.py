@@ -108,14 +108,16 @@ def _detect_provider():
             return {'provider': 'ollama', 'model': models[0]}
     except (urllib.error.URLError, OSError, json.JSONDecodeError, ValueError):
         pass
+    # Small, current, low-cost defaults: many short parallel calls where the
+    # divergence comes from the strategy prompts, so a fast cheap model fits.
     if os.environ.get('OPENAI_API_KEY'):
-        return {'provider': 'openai', 'model': 'gpt-4o-mini'}
+        return {'provider': 'openai', 'model': 'gpt-4.1-mini'}
     if os.environ.get('ANTHROPIC_API_KEY'):
-        return {'provider': 'anthropic', 'model': 'claude-sonnet-4-20250514'}
+        return {'provider': 'anthropic', 'model': 'claude-haiku-4-5'}
     if os.environ.get('GOOGLE_API_KEY'):
-        return {'provider': 'gemini', 'model': 'gemini-2.0-flash'}
+        return {'provider': 'gemini', 'model': 'gemini-2.5-flash'}
     if os.environ.get('OPENROUTER_API_KEY'):
-        return {'provider': 'openrouter', 'model': 'anthropic/claude-sonnet-4-20250514'}
+        return {'provider': 'openrouter', 'model': 'anthropic/claude-haiku-4-5'}
     return None
 
 
@@ -255,14 +257,23 @@ def _parse_openai_compat(raw):
     return choices[0].get('message', {}).get('content', '') if choices else ''
 
 
+# Current-generation Claude models use adaptive thinking and reject sampling
+# params, so sending temperature returns a 400. Omit it for them; Haiku and older
+# models still accept it. Extend this list as new no-sampling models ship.
+_NO_SAMPLING_CLAUDE = ('claude-sonnet-5', 'claude-opus-4-7', 'claude-opus-4-8',
+                       'claude-fable-5', 'claude-mythos-5')
+
+
 def _build_anthropic(system_prompt, user_prompt, model, temp, max_tokens, config):
     key = os.environ.get('ANTHROPIC_API_KEY', '')
-    body = json.dumps({
+    body = {
         'model': model, 'max_tokens': max_tokens,
         'system': system_prompt,
         'messages': [{'role': 'user', 'content': user_prompt}],
-        'temperature': temp,
-    }).encode()
+    }
+    if not any(m in model for m in _NO_SAMPLING_CLAUDE):
+        body['temperature'] = temp
+    body = json.dumps(body).encode()
     headers = {
         'Content-Type': 'application/json', 'x-api-key': key,
         'anthropic-version': '2023-06-01',

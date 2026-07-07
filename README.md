@@ -107,7 +107,7 @@ $ prism "Should we use REST or GraphQL for our API?"
   > REST is simpler and we already know it
   Conviction (0-100): 80
 
-  Generating perspectives (openai/gpt-4o-mini)...
+  Generating perspectives (openai/gpt-4.1-mini)...
 
   ──────────────────────────────────────────────────────
   DEFAULT ANSWER
@@ -332,7 +332,7 @@ Config cascades: `.prism.json` (project) → `~/.config/prism/config.json` (glob
 ```json
 {
   "provider": "openai",
-  "model": "gpt-4o-mini",
+  "model": "gpt-4.1-mini",
   "temperature": 0.9,
   "strategies": ["pre_mortem", "falsification", "adjacent_field"],
   "num_perspectives": 4,

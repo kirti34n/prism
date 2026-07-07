@@ -54,3 +54,10 @@ uses.
   answers. Prism sends `think: false` so the whole token budget goes to the answer
   instead of reasoning that gets cut off and stripped to nothing. Verified
   end-to-end against a local `qwen3.5:4b`.
+- Refreshed the auto-detected default models to current, low-cost ones
+  (`claude-haiku-4-5`, `gpt-4.1-mini`, `gemini-2.5-flash`). The old Anthropic
+  default `claude-sonnet-4-20250514` had reached end-of-life and would 404.
+- The Anthropic adapter no longer sends `temperature` to current-generation
+  models that reject sampling parameters (Sonnet 5, Opus 4.7/4.8, Fable 5), which
+  otherwise returned a 400. Older models and Haiku still get it. Divergence on
+  those models comes from the strategy prompts rather than temperature.

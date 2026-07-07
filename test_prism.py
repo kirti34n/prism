@@ -321,6 +321,21 @@ class TestBuildOllama(unittest.TestCase):
         self.assertIs(self._body('deepseek-r1:7b')['think'], False)
 
 
+class TestBuildAnthropic(unittest.TestCase):
+    def _body(self, model):
+        _, body, _, _ = prism._build_anthropic('sys', 'usr', model, 0.9, 300, {})
+        return json.loads(body)
+
+    def test_omits_temperature_for_no_sampling_models(self):
+        # Sonnet 5 / Opus 4.7+/ Fable 5 reject temperature with a 400
+        for m in ('claude-sonnet-5', 'claude-opus-4-8', 'claude-fable-5'):
+            self.assertNotIn('temperature', self._body(m), m)
+
+    def test_keeps_temperature_for_older_models(self):
+        for m in ('claude-haiku-4-5', 'claude-sonnet-4-6'):
+            self.assertEqual(self._body(m)['temperature'], 0.9, m)
+
+
 class TestForceUtf8(unittest.TestCase):
     def test_noop_when_stream_has_no_reconfigure(self):
         # StringIO has no .reconfigure, so the call must be swallowed, not raised
